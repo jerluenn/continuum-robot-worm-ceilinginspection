@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+import time
 
 sys.path.insert(0, "..")
 
@@ -29,8 +30,8 @@ initial_solution = np.zeros(16)
 initial_solution[3] = 1
 # initial_solution[7] = 3.69828287e-02
 # initial_solution[11] = 0.0027
-initial_solution[7] = 0.1
-initial_solution[11] = 0.6
+initial_solution[7] = 4
+initial_solution[11] = -4
 solver.set(0, 'x', initial_solution)
 
 subseq_solution = initial_solution
@@ -42,22 +43,21 @@ for i in range(robot_arm_model_1.get_num_integration_steps()):
     subseq_solution = integrator.get('x')
     solver.set(i+1, 'x', subseq_solution)
 
-a = 1
-
-wrench_lb = -5
-wrench_ub = 5
-
-lb = np.array([-5, -5, -5, -1.05, -1.05, -1.05, -1.05, #pose at start.
-            wrench_lb , wrench_lb , wrench_lb , wrench_lb , wrench_lb , wrench_lb, 
-            0, 0, 0])
-
-ub = np.array([5, 5, 5, 1.05, 1.05, 1.05, 1.05, #pose at start.
-            wrench_ub , wrench_ub , wrench_ub , wrench_ub , wrench_ub , wrench_ub, 
-            0, 0, 0])
+t0 = time.time()
 
 for i in range(NUM_ITERATIONS): 
 
     solver.solve()
-    print(solver.get_residuals())
-    print(solver.get_cost())
+
+    if solver.get_cost() < 1e-9:
+
+        break
+
+    NUM_ITERATIONS_TAKEN = i
+
+print(f"NUM_ITERATIONS_TAKEN to converge: ", NUM_ITERATIONS_TAKEN)
+print(f"Time taken/step: {(time.time() - t0)/NUM_ITERATIONS_TAKEN}")
+
+print("Final sol: ",solver.get(10, 'x'))
+print("Init sol: ", solver.get(0, 'x'))
 
