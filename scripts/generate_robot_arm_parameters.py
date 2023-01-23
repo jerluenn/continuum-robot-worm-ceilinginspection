@@ -35,6 +35,10 @@ class Robot_Arm_Params:
         self._J = J 
         self._I = I
 
+    def set_tendon_radiuses(self, r): 
+
+        self._tendon_radiuses = r
+
     def set_damping_coefficient(self, C): 
 
         self._C = C 
@@ -55,6 +59,10 @@ class Robot_Arm_Params:
     def set_rho(self, rho): 
 
         self._rho = rho
+
+    def get_tendon_radiuses(self): 
+
+        return self._tendon_radiuses
 
     def get_id(self):
 
