@@ -17,7 +17,7 @@ class Dynamics_Manager:
         self._robot_arm_model = robot_arm_model
         self.robot1 = Multiple_Shooting_Solver(robot_arm_model)
         self._num_tendons = self._robot_arm_model._tau.shape[0]
-        # self._solver_dynamic, self._integrator_dynamic = self.robot1.create_dynamic_solver() 
+        self._solver_dynamic, self._integrator_dynamic = self.robot1.create_dynamic_solver() 
         self._solver_static, self._integrator_static = self.robot1.create_static_solver()
         self._history_terms_i_minus_1 = np.zeros((13 + self._num_tendons, self._robot_arm_model.get_num_integration_steps()))
         self._history_terms_i_minus_2 = np.zeros((13 + self._num_tendons, self._robot_arm_model.get_num_integration_steps()))
@@ -46,6 +46,9 @@ class Dynamics_Manager:
         Works in eta, n, m, q, om."""
 
     def update_v_u_BDF_static(self): 
+
+        """Setting matrix must be 16xNUM_INTEGRATION_STEPS:
+        Works in eta, n, m, q, om."""
 
         self._history_terms_i_minus_1 = (self._c1+self._c2)*self._history_terms_i_minus_1
 
@@ -99,7 +102,7 @@ class Dynamics_Manager:
                         self._history_terms_i_minus_1[0:10, k] = self._solver_static.get(k, 'x')[3:13]
                         self._final_sol_viz[:, k+1] = self._solver_static.get(k+1, 'x')[0:3]
 
-                    # self.update_v_u_BDF_static()
+                    self.update_v_u_BDF_static()
 
                     break
 

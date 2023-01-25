@@ -287,6 +287,10 @@ class Robot_Arm_Model:
 
         return self._robot_arm_params_obj
 
+    def get_dynamic_robot_arm_model(self): 
+
+        return self._dynamic_model
+
     def get_static_robot_arm_model(self): 
 
         return self._static_model
