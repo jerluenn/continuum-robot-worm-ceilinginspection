@@ -16,8 +16,8 @@ class Multiple_Shooting_Solver:
         self._robot_arm_model = robot_arm_model
         self._boundary_length = self._robot_arm_model.get_boundary_length()
         self._integration_steps = self._robot_arm_model.get_num_integration_steps()
-        self.create_static_solver()
-
+        # self.create_static_solver()
+        
     def create_static_solver(self):
 
         self.ocp = AcadosOcp()
@@ -39,10 +39,10 @@ class Multiple_Shooting_Solver:
         # self.ocp.solver_options.sim_method_num_steps = self.integration_steps
         self.ocp.solver_options.qp_solver_warm_start = 2
 
-        self.ocp.solver_options.levenberg_marquardt = 0.0001
+        self.ocp.solver_options.levenberg_marquardt = 0.001
 
         self.ocp.solver_options.regularize_method = 'CONVEXIFY'
-        self.ocp.solver_options.sim_method_num_stages = 2
+        self.ocp.solver_options.sim_method_num_stages = 4
         self.ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM' # 
         # PARTIAL_CONDENSING_HPIPM, FULL_CONDENSING_QPOASES, FULL_CONDENSING_HPIPM,
         # PARTIAL_CONDENSING_QPDUNES, PARTIAL_CONDENSING_OSQP, FULL_CONDENSING_DAQP
@@ -76,11 +76,11 @@ class Multiple_Shooting_Solver:
 
         self.ocp.solver_options.nlp_solver_max_iter = 1
 
-        # AcadosOcpSolver.generate(self.ocp, json_file=f'{self.ocp.model.name}.json')
-        # AcadosOcpSolver.build(self.ocp.code_export_directory, with_cython=True)
+        AcadosOcpSolver.generate(self.ocp, json_file=f'{self.ocp.model.name}.json')
+        AcadosOcpSolver.build(self.ocp.code_export_directory, with_cython=True)
         
-        # solver = AcadosOcpSolver.create_cython_solver(json_file=f'{self.ocp.model.name}.json')
-        solver = AcadosOcpSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
+        solver = AcadosOcpSolver.create_cython_solver(json_file=f'{self.ocp.model.name}.json')
+        # solver = AcadosOcpSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
         integrator = AcadosSimSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
 
         return solver, integrator
@@ -97,13 +97,3 @@ class Multiple_Shooting_Solver:
         solver.constraints_set(0, 'lbx', lbx_0)
         solver.constraints_set(0, 'ubx', ubx_0)
 
-    def initialise_solver(self, solver, integrator, initial_solution, robot_arm_model): 
-
-        subseq_solution = initial_solution
-
-        for i in range(robot_arm_model.get_num_integration_steps()): 
-
-            integrator.set('x', subseq_solution)
-            integrator.solve()
-            subseq_solution = integrator.get('x')
-            solver.set(i+1, 'x', subseq_solution)
