@@ -64,6 +64,9 @@ class Robot_Arm_Model:
         self._f_ext = self._mass_distribution * self._g
         self._Kappa = SX.sym('Kappa', 1)
         self._c0 = (1.5 + self._robot_arm_params_obj.get_alpha())/(self._robot_arm_params_obj.get_time_step()*(1 + self._robot_arm_params_obj.get_alpha()))
+        self._c1 = -2/self._robot_arm_params_obj.get_time_step()
+        self._c2 = (0.5 + self._robot_arm_params_obj.get_alpha())/(self._robot_arm_params_obj.get_time_step()*(1+self._robot_arm_params_obj.get_alpha()))
+        self._d1 = self._robot_arm_params_obj.get_alpha()/(1+self._robot_arm_params_obj.get_alpha())
         self._growth_rate = 1.0
 
         # Intermediate states
@@ -100,9 +103,14 @@ class Robot_Arm_Model:
 
         self._u = inv(self._Kbt)@transpose(reshape(self._R, 3, 3))@self._m
         self._v = inv(self._Kse)@transpose(reshape(self._R, 3, 3))@self._n + SX([0, 0, 1])
-        self._u_dyn = inv(self._robot_arm_params_obj.get_Kbt() + self._c0*self._robot_arm_params_obj.get_Bbt())@(transpose(reshape(self._R, 3, 3))@self._m - self._robot_arm_params_obj.get_Bbt()@(inv(self._robot_arm_params_obj.get_Kbt())@self._R_history@self._m_history))
-        self._v_dyn = inv(self._robot_arm_params_obj.get_Kse() + self._c0*self._robot_arm_params_obj.get_Bse())@(transpose(reshape(self._R, 3, 3))@self._n + self._robot_arm_params_obj.get_Kse()@SX([0, 0, 1]) - self._robot_arm_params_obj.get_Bse()@((inv(self._robot_arm_params_obj.get_Kse())@self._R_history@self._n_history + SX([0, 0, 1]))))
+        self._u_dyn = inv(self._robot_arm_params_obj.get_Kbt() + self._c0*self._robot_arm_params_obj.get_Bbt())@(transpose(reshape(self._R, 3, 3))@self._m - self._robot_arm_params_obj.get_Bbt()@(inv(self._robot_arm_params_obj.get_Kbt())@transpose(self._R_history)@self._m_history))
+        self._v_dyn = inv(self._robot_arm_params_obj.get_Kse() + self._c0*self._robot_arm_params_obj.get_Bse())@(transpose(reshape(self._R, 3, 3))@self._n + self._robot_arm_params_obj.get_Kse()@SX([0, 0, 1]) - self._robot_arm_params_obj.get_Bse()@((inv(self._robot_arm_params_obj.get_Kse())@transpose(self._R_history)@self._n_history + SX([0, 0, 1]))))
         self._k = 0.1
+
+        # self._v_h = 
+        # self._u_h = 
+        # self._q_h = 
+        # self._om_h = 
 
         self._v_t = self._c0*self._v + (inv(self._robot_arm_params_obj.get_Kse())@self._R_history@self._n_history + SX([0, 0, 1]))
         self._u_t = self._c0*self._u + inv(self._robot_arm_params_obj.get_Kbt())@self._R_history@self._m_history
@@ -195,7 +203,7 @@ class Robot_Arm_Model:
         self._dynamic_model.u = u
         self._dynamic_model.z = SX([])
         self._dynamic_model.xdot = x_dot_impl
-        self._dynamic_model.p = vertcat(self._n_history, self._m_history, self._q_history, self._om_history, self._eta_history)
+        self._dynamic_model.p = vertcat(self._eta_history, self._n_history, self._m_history, self._q_history, self._om_history)
 
         sim = AcadosSim()
         sim.model = self._dynamic_model 

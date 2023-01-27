@@ -39,7 +39,7 @@ class Multiple_Shooting_Solver:
         # self.ocp.solver_options.sim_method_num_steps = self.integration_steps
         self.ocp.solver_options.qp_solver_warm_start = 2
 
-        self.ocp.solver_options.levenberg_marquardt = 0.001
+        self.ocp.solver_options.levenberg_marquardt = 0.0001
 
         self.ocp.solver_options.regularize_method = 'CONVEXIFY'
         self.ocp.solver_options.sim_method_num_stages = 4
@@ -127,8 +127,8 @@ class Multiple_Shooting_Solver:
         self.pos_ub = 5
         self.eta_ub = 1.05
         self.tension_max = 50
-        self.q_ub = 5 
-        self.om_ub = 5 
+        self.q_ub = 10
+        self.om_ub = 10 
 
         self.ocp.constraints.idxbx_0 = np.arange(self.nx)
 
