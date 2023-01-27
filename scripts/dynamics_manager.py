@@ -9,6 +9,7 @@ import time
 
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import FuncAnimation
 
 class Dynamics_Manager: 
 
@@ -19,43 +20,51 @@ class Dynamics_Manager:
         self._num_tendons = self._robot_arm_model._tau.shape[0]
         self._solver_dynamic, self._integrator_dynamic = self.robot1.create_dynamic_solver() 
         self._solver_static, self._integrator_static = self.robot1.create_static_solver()
-        # self._history_terms_i_minus_1 = np.zeros((13 + self._num_tendons, self._robot_arm_model.get_num_integration_steps()))
-        # self._history_terms_i_minus_2 = np.zeros((13 + self._num_tendons, self._robot_arm_model.get_num_integration_steps()))
-        self._history_terms_i = np.zeros((16, self._robot_arm_model.get_num_integration_steps(), 3))
+        self._history_terms_i_minus_1 = np.zeros((13 + self._num_tendons, self._robot_arm_model.get_num_integration_steps()))
+        self._history_terms_i_minus_2 = np.zeros((13 + self._num_tendons, self._robot_arm_model.get_num_integration_steps()))
+        self._history_terms_i_minus_3 = np.zeros((13 + self._num_tendons, self._robot_arm_model.get_num_integration_steps()))
+        self._history_terms_i = np.zeros((16*3, self._robot_arm_model.get_num_integration_steps()))
         self._MAX_ITERATIONS_STATIC = 1000
         self._MAX_ITERATIONS_DYNAMIC = 1000
         self._alpha = alpha
         self._time_step = time_step
-        self._solve_BDF_coefficients()
         self._wrench_lb = -50
         self._wrench_ub = 50
         self._simulation_counter = 1
+        # self._initialise_animation()
         """TO DO: 
         1. Do update v_u_BDF 
             1a. Need to have a manager for history terms.
             1b. Update history terms."""
 
-    def _solve_BDF_coefficients(self):
+    def _initialise_animation(self): 
 
-        self._c0 = (1.5+self._alpha)/(self._time_step*(1+self._alpha))
-        self._c1 = -2/self._time_step
-        self._c2 = (0.5 + self._alpha)/(self._time_step*(1+self._alpha))
-        self._d1 = self._alpha/(1+self._alpha)
+        self.fig = plt.figure() 
+        self.ax = self.fig.add_subplots(projection='3d')
+        self.xdata, self.ydata, self.zdata = [], [], []
+        self.ln, = self.ax.plot([], [], 'ro')
+        self._initialise_animation_func()
+
+    def _initialise_animation_func(self): 
+
+        self.ax.set_xlim(0, 2*np.pi)
+        self.ax.set_ylim(-1, 1)
+        self.ax.set_ylim(-1, 1)
+        
+        return self.ln,
+    
+    def update(self, frame): 
+
+        self.ln.set_data()
 
     def update_v_u_BDF(self): 
 
-        """Setting matrix must be 16xNUM_INTEGRATION_STEPS:
-        Works in eta, n, m, q, om."""
-
-        i_minus_1 = self._index_history%3
-        i_minus_2 = (self._index_history - 1)%3
-        i_minus_3 = (self._index_history - 2)%3
-
-        history_terms_BDF = self._d1*self._c2*self._history_terms_i[:, :, i_minus_3] + (self._c0*self._d1 + self._c1)*self._history_terms_i[:, :, i_minus_1] + (self._c1*self._d1 + self._c2)*self._history_terms_i[:, :, i_minus_2]
+        """Setting matrix must be (16*3)xNUM_INTEGRATION_STEPS:
+        Works in eta (12), n (9), m (9), q (9), om (9)."""
 
         for i in range(self._robot_arm_model.get_num_integration_steps()):
 
-            self._solver_dynamic.set(i, 'p', history_terms_BDF[:, i])
+            self._solver_dynamic.set(i, 'p', self._history_terms_i[:, i])
 
 
     def update_v_u_BDF_static(self): 
@@ -63,11 +72,9 @@ class Dynamics_Manager:
         """Setting matrix must be 16xNUM_INTEGRATION_STEPS:
         Works in eta, n, m, q, om."""
 
-        self._history_terms_i = (self._c1+self._c2)*self._history_terms_i
-
         for i in range(self._robot_arm_model.get_num_integration_steps()):
 
-            self._solver_dynamic.set(i, 'p', self._history_terms_i[:, i, 0])
+            self._solver_dynamic.set(i, 'p', self._history_terms_i[:, i])
 
     def set_tensions_static(self, tension): 
 
@@ -79,8 +86,8 @@ class Dynamics_Manager:
 
     def set_tensions_dynamic(self, tension): 
 
-        lbx_0 = np.hstack((self._solver_dynamic.get(0, 'x')[0:7], self._wrench_lb*np.ones(6), self._wrench_lb*np.ones(6), tension))
-        ubx_0 = np.hstack((self._solver_dynamic.get(0, 'x')[0:7], self._wrench_ub*np.ones(6), self._wrench_ub*np.ones(6), tension))        
+        lbx_0 = np.hstack((self._solver_dynamic.get(0, 'x')[0:7], self._wrench_lb*np.ones(6), self._wrench_lb*np.zeros(6), tension))
+        ubx_0 = np.hstack((self._solver_dynamic.get(0, 'x')[0:7], self._wrench_ub*np.ones(6), self._wrench_ub*np.zeros(6), tension))        
 
         self._solver_dynamic.constraints_set(0, 'lbx', lbx_0)
         self._solver_dynamic.constraints_set(0, 'ubx', ubx_0)     
@@ -130,7 +137,9 @@ class Dynamics_Manager:
 
                     for k in range(self._robot_arm_model.get_num_integration_steps()):
 
-                        self._history_terms_i[0:10, k, 0] = self._solver_static.get(k, 'x')[3:13]
+                        self._history_terms_i[0:10, k] = self._solver_static.get(k, 'x')[3:13]
+                        self._history_terms_i[16:26, k] = self._solver_static.get(k, 'x')[3:13]
+                        self._history_terms_i[32:42, k] = self._solver_static.get(k, 'x')[3:13]
                         self._final_sol_viz[:, k+1] = self._solver_static.get(k+1, 'x')[0:3]
 
                     self.update_v_u_BDF_static()
@@ -145,13 +154,11 @@ class Dynamics_Manager:
 
         t = time.time()
 
-        self._index_history = (self._simulation_counter)%3
-
         for i in range(self._MAX_ITERATIONS_DYNAMIC): 
  
             self._solver_dynamic.solve()
 
-            if self._solver_dynamic.get_cost() < 1e-5:
+            if self._solver_dynamic.get_cost() < 1e-4:
 
                 print("Number of iterations required: ", i+1)
                 print("Total time taken: ", (time.time() - t), 's')
@@ -160,7 +167,9 @@ class Dynamics_Manager:
 
                 for k in range(self._robot_arm_model.get_num_integration_steps()):
 
-                    self._history_terms_i[:, k, self._index_history] = self._solver_dynamic.get(k, 'x')[3:19]
+                    self._history_terms_i[32:48, :] = self._history_terms_i[16:32, :]
+                    self._history_terms_i[16:32, :] = self._history_terms_i[0:16, :]
+                    self._history_terms_i[0:16, k] = self._solver_dynamic.get(k, 'x')[3:19]
                     self._final_sol_viz[:, k+1] = self._solver_dynamic.get(k+1, 'x')[0:3]
 
                 self._simulation_counter += 1
