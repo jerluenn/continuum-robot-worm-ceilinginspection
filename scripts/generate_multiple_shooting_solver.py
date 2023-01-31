@@ -101,7 +101,7 @@ class Multiple_Shooting_Solver:
         self.ocp.dims.N = self._integration_steps
         self.ocp.solver_options.qp_solver_iter_max = 400
         self.ocp.cost.cost_type_e = 'NONLINEAR_LS'
-        self.ocp.model.cost_y_expr_e = vertcat(x[7:13] - self._robot_arm_model.get_tendon_point_force())
+        self.ocp.model.cost_y_expr_e = vertcat(x[7:13] - self._robot_arm_model.get_tendon_point_force_dynamic())
         self.ocp.cost.W_e = np.identity(6)
         self.ocp.cost.yref_e = np.zeros((6))
 

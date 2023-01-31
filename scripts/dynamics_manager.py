@@ -23,7 +23,7 @@ class Dynamics_Manager:
         self._history_terms_i_minus_1 = np.zeros((13 + self._num_tendons, self._robot_arm_model.get_num_integration_steps()))
         self._history_terms_i_minus_2 = np.zeros((13 + self._num_tendons, self._robot_arm_model.get_num_integration_steps()))
         self._history_terms_i_minus_3 = np.zeros((13 + self._num_tendons, self._robot_arm_model.get_num_integration_steps()))
-        self._history_terms_i = np.zeros((16*3, self._robot_arm_model.get_num_integration_steps()))
+        self._history_terms_i = np.zeros((16*3, 11))
         self._MAX_ITERATIONS_STATIC = 1000
         self._MAX_ITERATIONS_DYNAMIC = 1000
         self._alpha = alpha
@@ -36,6 +36,14 @@ class Dynamics_Manager:
         1. Do update v_u_BDF 
             1a. Need to have a manager for history terms.
             1b. Update history terms."""
+
+
+        ### For testing only. 
+
+        self._c0 = (1.5 + self._robot_arm_model._robot_arm_params_obj.get_alpha())/(self._robot_arm_model._robot_arm_params_obj.get_time_step()*(1 + self._robot_arm_model._robot_arm_params_obj.get_alpha()))
+        self._c1 = -2/self._robot_arm_model._robot_arm_params_obj.get_time_step()
+        self._c2 = (0.5 + self._robot_arm_model._robot_arm_params_obj.get_alpha())/(self._robot_arm_model._robot_arm_params_obj.get_time_step()*(1+self._robot_arm_model._robot_arm_params_obj.get_alpha()))
+        self._d1 = self._robot_arm_model._robot_arm_params_obj.get_alpha()/(1+self._robot_arm_model._robot_arm_params_obj.get_alpha())
 
     def _initialise_animation(self): 
 
@@ -62,9 +70,19 @@ class Dynamics_Manager:
         """Setting matrix must be (16*3)xNUM_INTEGRATION_STEPS:
         Works in eta (12), n (9), m (9), q (9), om (9)."""
 
+        print(self._solver_dynamic.get(0, 'x'))
+        self._integrator_dynamic.set('x', self._solver_dynamic.get(0, 'x'))
+
         for i in range(self._robot_arm_model.get_num_integration_steps()):
 
+            self._integrator_dynamic.solve()
+            x = self._integrator_dynamic.get('x')
+            self._integrator_dynamic.set('x', x)
+            self._integrator_dynamic.set('p', self._history_terms_i[:, i])
             self._solver_dynamic.set(i, 'p', self._history_terms_i[:, i])
+
+
+        print(self._integrator_dynamic.get('x'))
 
 
     def update_v_u_BDF_static(self): 
@@ -135,12 +153,12 @@ class Dynamics_Manager:
                     print("Time taken per iteration: ", (time.time() - t)/(i+1), "s.")
                     self._init_sol = self._solver_static.get(0, 'x')
 
-                    for k in range(self._robot_arm_model.get_num_integration_steps()):
+                    for k in range(self._robot_arm_model.get_num_integration_steps()+1):
 
                         self._history_terms_i[0:10, k] = self._solver_static.get(k, 'x')[3:13]
                         self._history_terms_i[16:26, k] = self._solver_static.get(k, 'x')[3:13]
                         self._history_terms_i[32:42, k] = self._solver_static.get(k, 'x')[3:13]
-                        self._final_sol_viz[:, k+1] = self._solver_static.get(k+1, 'x')[0:3]
+                        self._final_sol_viz[:, k] = self._solver_static.get(k, 'x')[0:3]
 
                     self.update_v_u_BDF_static()
                     self._initialise_dynamic_solver()
@@ -158,19 +176,19 @@ class Dynamics_Manager:
  
             self._solver_dynamic.solve()
 
-            if self._solver_dynamic.get_cost() < 1e-4:
+            if self._solver_dynamic.get_cost() < 1e-6:
 
                 print("Number of iterations required: ", i+1)
                 print("Total time taken: ", (time.time() - t), 's')
                 print("Time taken per iteration: ", (time.time() - t)/(i+1), "s.")
                 self._init_sol = self._solver_dynamic.get(0, 'x')
 
-                for k in range(self._robot_arm_model.get_num_integration_steps()):
+                for k in range(self._robot_arm_model.get_num_integration_steps()+1):
 
-                    self._history_terms_i[32:48, :] = self._history_terms_i[16:32, :]
-                    self._history_terms_i[16:32, :] = self._history_terms_i[0:16, :]
+                    self._history_terms_i[32:48, k] = self._history_terms_i[16:32, k]
+                    self._history_terms_i[16:32, k] = self._history_terms_i[0:16, k]
                     self._history_terms_i[0:16, k] = self._solver_dynamic.get(k, 'x')[3:19]
-                    self._final_sol_viz[:, k+1] = self._solver_dynamic.get(k+1, 'x')[0:3]
+                    self._final_sol_viz[:, k] = self._solver_dynamic.get(k, 'x')[0:3]
 
                 self._simulation_counter += 1
                 self.update_v_u_BDF()

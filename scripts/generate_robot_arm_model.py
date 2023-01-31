@@ -75,6 +75,8 @@ class Robot_Arm_Model:
         self._q_history = SX.sym('q_hist', 9)
         self._om_history = SX.sym('om_hist', 9)
         self._eta_history = SX.sym('eta_history', 12)
+        self._u_history_history = SX.sym('u_history_history', 3)
+        self._v_history_history = SX.sym('v_history_history', 3)
         self._R_history_1 = SX(3, 3)
 
         self._R_history_1[0,0] = 2*(self._eta_history[0]**2 + self._eta_history[1]**2) - 1
@@ -109,7 +111,7 @@ class Robot_Arm_Model:
         self._R_history_3[2,1] = 2*(self._eta_history[8]*self._eta_history[3] + self._eta_history[6]*self._eta_history[7])
         self._R_history_3[2,2] = 2*(self._eta_history[6]**2 + self._eta_history[3]**2) - 1
 
-        # Setting R 
+       # Setting R 
 
         self._R = SX(3,3)
         self._R[0,0] = 2*(self._eta[0]**2 + self._eta[1]**2) - 1
@@ -132,6 +134,8 @@ class Robot_Arm_Model:
 
             v_history_list.append(SX([0, 0, 1]) + inv(self._Kse)@transpose(R_history_list[i])@self._n_history[i*3:i*3+3])
             u_history_list.append(inv(self._Kbt)@transpose(R_history_list[i])@self._m_history[i*3:i*3+3])
+            # v_history_list.append(inv(self._robot_arm_params_obj.get_Kse() + self._c0*self._robot_arm_params_obj.get_Bse())@(transpose(reshape(self._R, 3, 3))@self._n + self._robot_arm_params_obj.get_Kse()@SX([0, 0, 1]) - self._robot_arm_params_obj.get_Bse()@self._v_h))
+            # u_history_list.append(inv(self._robot_arm_params_obj.get_Kbt() + self._c0*self._robot_arm_params_obj.get_Bbt())@(transpose(reshape(self._R, 3, 3))@self._m - self._robot_arm_params_obj.get_Bbt()@self._u_h))
 
         self._v_h = (self._c0*self._d1+self._c1)*(v_history_list[0]) + (self._c1*self._d1 + self._c2)*(v_history_list[1]) + self._c2*self._d1*(v_history_list[2])
         self._u_h = (self._c0*self._d1+self._c1)*(u_history_list[0]) + (self._c1*self._d1 + self._c2)*(u_history_list[1]) + self._c2*self._d1*(u_history_list[2])
@@ -142,6 +146,8 @@ class Robot_Arm_Model:
         self._v = inv(self._Kse)@transpose(reshape(self._R, 3, 3))@self._n + SX([0, 0, 1])
         self._u_dyn = inv(self._robot_arm_params_obj.get_Kbt() + self._c0*self._robot_arm_params_obj.get_Bbt())@(transpose(reshape(self._R, 3, 3))@self._m - self._robot_arm_params_obj.get_Bbt()@self._u_h)
         self._v_dyn = inv(self._robot_arm_params_obj.get_Kse() + self._c0*self._robot_arm_params_obj.get_Bse())@(transpose(reshape(self._R, 3, 3))@self._n + self._robot_arm_params_obj.get_Kse()@SX([0, 0, 1]) - self._robot_arm_params_obj.get_Bse()@self._v_h)
+        # self._u_dyn = inv(self._Kbt)@transpose(reshape(self._R, 3, 3))@self._m
+        # self._v_dyn = inv(self._Kse)@transpose(reshape(self._R, 3, 3))@self._n + SX([0, 0, 1])
         self._k = 0.1
 
         self._v_t = self._c0*self._v_dyn + self._v_h
@@ -218,6 +224,7 @@ class Robot_Arm_Model:
         ) + c * self._eta 
         n_dot = reshape(self._R, 3, 3) @ (self._robot_arm_params_obj.get_mass_distribution()*(skew(self._om)@self._q + self._q_t)) - self._robot_arm_params_obj.get_mass_distribution()*self._g + self._robot_arm_params_obj.get_C()@(self._q*self._q*(1/(1 + SX.exp(-self._growth_rate*self._q)))) - self.get_external_distributed_forces_dyn()
         m_dot = self._robot_arm_params_obj.get_rho() * reshape(self._R, 3, 3) @ (skew(self._om) @ self._robot_arm_params_obj.get_J() @ self._om + self._robot_arm_params_obj.get_J()@self._om_t) - skew(p_dot)@self._n
+
         q_dot = self._v_t - skew(self._u_dyn)@self._q + skew(self._om)@self._v_dyn
         om_dot = self._u_t - skew(self._u_dyn)@self._om
         tau_dot = SX.zeros(self._tau.shape[0])
@@ -306,6 +313,18 @@ class Robot_Arm_Model:
         W_t = SX.zeros(6)
 
         p_dot = reshape(self._R, 3, 3) @ self._v
+
+        for i in range(self._tau.shape[0]): 
+
+            W_t -= vertcat(self._tau[i]*(p_dot/norm_2(p_dot)), self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
+
+        return W_t
+
+    def get_tendon_point_force_dynamic(self):
+
+        W_t = SX.zeros(6)
+
+        p_dot = reshape(self._R, 3, 3) @ self._v_dyn
 
         for i in range(self._tau.shape[0]): 
 
