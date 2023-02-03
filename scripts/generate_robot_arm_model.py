@@ -70,46 +70,6 @@ class Robot_Arm_Model:
         self._growth_rate = 1.0
 
         # Intermediate states
-        self._n_history = SX.sym('v_hist', 9)
-        self._m_history = SX.sym('u_hist', 9)
-        self._q_history = SX.sym('q_hist', 9)
-        self._om_history = SX.sym('om_hist', 9)
-        self._eta_history = SX.sym('eta_history', 12)
-        self._u_history_history = SX.sym('u_history_history', 3)
-        self._v_history_history = SX.sym('v_history_history', 3)
-        self._R_history_1 = SX(3, 3)
-
-        self._R_history_1[0,0] = 2*(self._eta_history[0]**2 + self._eta_history[1]**2) - 1
-        self._R_history_1[0,1] = 2*(self._eta_history[1]*self._eta_history[2] - self._eta_history[0]*self._eta_history[3])
-        self._R_history_1[0,2] = 2*(self._eta_history[1]*self._eta_history[3] + self._eta_history[0]*self._eta_history[2])
-        self._R_history_1[1,0] = 2*(self._eta_history[1]*self._eta_history[2] + self._eta_history[0]*self._eta_history[3])
-        self._R_history_1[1,1] = 2*(self._eta_history[0]**2 + self._eta_history[2]**2) - 1
-        self._R_history_1[1,2] = 2*(self._eta_history[2]*self._eta_history[3] - self._eta_history[0]*self._eta_history[1])
-        self._R_history_1[2,0] = 2*(self._eta_history[1]*self._eta_history[3] - self._eta_history[0]*self._eta_history[2])
-        self._R_history_1[2,1] = 2*(self._eta_history[2]*self._eta_history[3] + self._eta_history[0]*self._eta_history[1])
-        self._R_history_1[2,2] = 2*(self._eta_history[0]**2 + self._eta_history[3]**2) - 1
-
-        self._R_history_2 = SX(3, 3)
-        self._R_history_2[0,0] = 2*(self._eta_history[3]**2 + self._eta_history[4]**2) - 1
-        self._R_history_2[0,1] = 2*(self._eta_history[4]*self._eta_history[5] - self._eta_history[3]*self._eta_history[3])
-        self._R_history_2[0,2] = 2*(self._eta_history[4]*self._eta_history[3] + self._eta_history[3]*self._eta_history[5])
-        self._R_history_2[1,0] = 2*(self._eta_history[4]*self._eta_history[5] + self._eta_history[3]*self._eta_history[3])
-        self._R_history_2[1,1] = 2*(self._eta_history[3]**2 + self._eta_history[5]**2) - 1
-        self._R_history_2[1,2] = 2*(self._eta_history[5]*self._eta_history[3] - self._eta_history[3]*self._eta_history[4])
-        self._R_history_2[2,0] = 2*(self._eta_history[4]*self._eta_history[3] - self._eta_history[3]*self._eta_history[5])
-        self._R_history_2[2,1] = 2*(self._eta_history[5]*self._eta_history[3] + self._eta_history[3]*self._eta_history[4])
-        self._R_history_2[2,2] = 2*(self._eta_history[3]**2 + self._eta_history[3]**2) - 1
-
-        self._R_history_3 = SX(3, 3)
-        self._R_history_3[0,0] = 2*(self._eta_history[6]**2 + self._eta_history[7]**2) - 1
-        self._R_history_3[0,1] = 2*(self._eta_history[7]*self._eta_history[8] - self._eta_history[6]*self._eta_history[3])
-        self._R_history_3[0,2] = 2*(self._eta_history[7]*self._eta_history[3] + self._eta_history[6]*self._eta_history[8])
-        self._R_history_3[1,0] = 2*(self._eta_history[7]*self._eta_history[8] + self._eta_history[6]*self._eta_history[3])
-        self._R_history_3[1,1] = 2*(self._eta_history[6]**2 + self._eta_history[8]**2) - 1
-        self._R_history_3[1,2] = 2*(self._eta_history[8]*self._eta_history[3] - self._eta_history[6]*self._eta_history[7])
-        self._R_history_3[2,0] = 2*(self._eta_history[7]*self._eta_history[3] - self._eta_history[6]*self._eta_history[8])
-        self._R_history_3[2,1] = 2*(self._eta_history[8]*self._eta_history[3] + self._eta_history[6]*self._eta_history[7])
-        self._R_history_3[2,2] = 2*(self._eta_history[6]**2 + self._eta_history[3]**2) - 1
 
        # Setting R 
 
@@ -124,36 +84,26 @@ class Robot_Arm_Model:
         self._R[2,1] = 2*(self._eta[2]*self._eta[3] + self._eta[0]*self._eta[1])
         self._R[2,2] = 2*(self._eta[0]**2 + self._eta[3]**2) - 1
 
-        # Intermediate states
-
-        R_history_list = [self._R_history_1, self._R_history_2, self._R_history_3]
-        v_history_list = []
-        u_history_list = []
-
-        for i in range(3):
-
-            v_history_list.append(SX([0, 0, 1]) + inv(self._Kse)@transpose(R_history_list[i])@self._n_history[i*3:i*3+3])
-            u_history_list.append(inv(self._Kbt)@transpose(R_history_list[i])@self._m_history[i*3:i*3+3])
-            # v_history_list.append(inv(self._robot_arm_params_obj.get_Kse() + self._c0*self._robot_arm_params_obj.get_Bse())@(transpose(reshape(self._R, 3, 3))@self._n + self._robot_arm_params_obj.get_Kse()@SX([0, 0, 1]) - self._robot_arm_params_obj.get_Bse()@self._v_h))
-            # u_history_list.append(inv(self._robot_arm_params_obj.get_Kbt() + self._c0*self._robot_arm_params_obj.get_Bbt())@(transpose(reshape(self._R, 3, 3))@self._m - self._robot_arm_params_obj.get_Bbt()@self._u_h))
-
-        self._v_h = (self._c0*self._d1+self._c1)*(v_history_list[0]) + (self._c1*self._d1 + self._c2)*(v_history_list[1]) + self._c2*self._d1*(v_history_list[2])
-        self._u_h = (self._c0*self._d1+self._c1)*(u_history_list[0]) + (self._c1*self._d1 + self._c2)*(u_history_list[1]) + self._c2*self._d1*(u_history_list[2])
-        self._q_h = (self._c0*self._d1+self._c1)*(self._q_history[0:3]) + (self._c1*self._d1 + self._c2)*(self._q_history[3:6]) + self._c2*self._d1*(self._q_history[6:9])
-        self._om_h = (self._c0*self._d1+self._c1)*(self._om_history[0:3]) + (self._c1*self._d1 + self._c2)*(self._om_history[3:6]) + self._c2*self._d1*(self._om_history[6:9])
+        self._v_history = SX.sym('v_hist', 3)
+        self._u_history = SX.sym('u_hist', 3)
+        self._q_history = SX.sym('q_hist', 3)
+        self._om_history = SX.sym('om_hist', 3)
 
         self._u = inv(self._Kbt)@transpose(reshape(self._R, 3, 3))@self._m
         self._v = inv(self._Kse)@transpose(reshape(self._R, 3, 3))@self._n + SX([0, 0, 1])
-        self._u_dyn = inv(self._robot_arm_params_obj.get_Kbt() + self._c0*self._robot_arm_params_obj.get_Bbt())@(transpose(reshape(self._R, 3, 3))@self._m - self._robot_arm_params_obj.get_Bbt()@self._u_h)
-        self._v_dyn = inv(self._robot_arm_params_obj.get_Kse() + self._c0*self._robot_arm_params_obj.get_Bse())@(transpose(reshape(self._R, 3, 3))@self._n + self._robot_arm_params_obj.get_Kse()@SX([0, 0, 1]) - self._robot_arm_params_obj.get_Bse()@self._v_h)
+        self._u_dyn = inv(self._robot_arm_params_obj.get_Kbt() + self._c0*self._robot_arm_params_obj.get_Bbt())@(transpose(reshape(self._R, 3, 3))@self._m - self._robot_arm_params_obj.get_Bbt()@self._u_history)
+        self._v_dyn = inv(self._robot_arm_params_obj.get_Kse() + self._c0*self._robot_arm_params_obj.get_Bse())@(transpose(reshape(self._R, 3, 3))@self._n + self._robot_arm_params_obj.get_Kse()@SX([0, 0, 1]) - self._robot_arm_params_obj.get_Bse()@self._v_history)
         # self._u_dyn = inv(self._Kbt)@transpose(reshape(self._R, 3, 3))@self._m
         # self._v_dyn = inv(self._Kse)@transpose(reshape(self._R, 3, 3))@self._n + SX([0, 0, 1])
         self._k = 0.1
 
-        self._v_t = self._c0*self._v_dyn + self._v_h
-        self._u_t = self._c0*self._u_dyn + self._u_h
-        self._q_t = self._c0*self._q + self._q_h
-        self._om_t = self._c0*self._om + self._om_h
+        self._v_t = self._c0*self._v_dyn + self._v_history
+        self._u_t = self._c0*self._u_dyn + self._u_history
+
+        # self._v_t = self._v_history
+        # self._u_t = self._u_history
+        self._q_t = self._c0*self._q + self._q_history
+        self._om_t = self._c0*self._om + self._om_history
 
 
     def _create_static_integrator(self):
@@ -227,6 +177,10 @@ class Robot_Arm_Model:
 
         q_dot = self._v_t - skew(self._u_dyn)@self._q + skew(self._om)@self._v_dyn
         om_dot = self._u_t - skew(self._u_dyn)@self._om
+
+        # q_dot = self._v_t
+        # om_dot = self._u_t
+
         tau_dot = SX.zeros(self._tau.shape[0])
 
         x = vertcat(self._p, self._eta, self._n, self._m, self._q, self._om, self._tau)
@@ -243,11 +197,7 @@ class Robot_Arm_Model:
         self._dynamic_model.z = SX([])
         self._dynamic_model.xdot = x_dot_impl
 
-        parameters_to_update = SX([])
-
-        for i in range(3): 
-
-            parameters_to_update = vertcat(parameters_to_update, self._eta_history[i*4: i*4 + 4], self._n_history[i*3: i*3 + 3], self._m_history[i*3: i*3 + 3], self._q_history[i*3: i*3 + 3], self._om_history[i*3: i*3 + 3])
+        parameters_to_update = vertcat(self._v_history, self._u_history, self._q_history, self._om_history)
 
         self._dynamic_model.p = parameters_to_update
 

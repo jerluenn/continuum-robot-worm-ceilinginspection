@@ -120,7 +120,7 @@ class Multiple_Shooting_Solver:
         self.ocp.solver_options.print_level = 0
         self.ocp.solver_options.nlp_solver_type = 'SQP' # SQP_RTI, SQP
         self.ocp.solver_options.tf = self._boundary_length
-        self.ocp.parameter_values = np.zeros(48)
+        self.ocp.parameter_values = np.zeros(12)
 
         self.wrench_lb = -50
         self.wrench_ub = 50
