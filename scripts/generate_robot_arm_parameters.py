@@ -37,7 +37,8 @@ class Robot_Arm_Params:
 
     def set_tendon_radiuses(self, r): 
 
-        self._tendon_radiuses = r
+        self._tendon_radiuses = SX(r)
+        self._tendon_radiuses_numpy = np.array(r)
 
     def set_damping_coefficient(self, C): 
 

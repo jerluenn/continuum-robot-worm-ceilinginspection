@@ -36,10 +36,10 @@ class Multiple_Shooting_Solver:
         self.ocp.cost.W_e = np.identity(6)
         self.ocp.cost.yref_e = np.zeros((6))
 
-        # self.ocp.solver_options.sim_method_num_steps = self.integration_steps
+        self.ocp.solver_options.sim_method_num_steps = self._integration_steps
         self.ocp.solver_options.qp_solver_warm_start = 2
 
-        self.ocp.solver_options.levenberg_marquardt = 0.0001
+        self.ocp.solver_options.levenberg_marquardt = 0.000001
 
         self.ocp.solver_options.regularize_method = 'CONVEXIFY'
         self.ocp.solver_options.sim_method_num_stages = 4
@@ -105,7 +105,7 @@ class Multiple_Shooting_Solver:
         self.ocp.cost.W_e = np.identity(6)
         self.ocp.cost.yref_e = np.zeros((6))
 
-        # self.ocp.solver_options.sim_method_num_steps = self.integration_steps
+        self.ocp.solver_options.sim_method_num_steps = self._integration_steps
         self.ocp.solver_options.qp_solver_warm_start = 2
 
         self.ocp.solver_options.levenberg_marquardt = 0.000001
@@ -136,7 +136,7 @@ class Multiple_Shooting_Solver:
 
         self.ocp.constraints.lbx_0 = np.hstack((0, 0, 0, 1, 0, 0, 0, self.wrench_lb*np.ones(6), -self.q_ub*np.ones(3), -self.om_ub*np.ones(3),np.zeros(self.nx - 19)))
 
-        self.ocp.constraints.ubx_0 = np.hstack((0, 0, 0, 1, 0, 0, 0, self.wrench_ub*np.ones(6), self.q_ub*np.ones(3), self.om_ub*np.ones(3), np.zeros(self.nx - 19)))        
+        self.ocp.constraints.ubx_0 = np.hstack((0, 0, 0, 1, 0, 0, 0, self.wrench_ub*np.ones(6), self.q_ub*np.ones(3), self.om_ub*np.ones(3), np.ones(self.nx-19)*self.tension_max))        
 
         self.ocp.constraints.idxbx = np.arange(self.nx)
 

@@ -28,6 +28,7 @@ class Robot_Arm_Model:
         self._boundary_length = self._robot_arm_params_obj.get_arm_length()
         self._id = self._robot_arm_params_obj.get_id()
         self._tendon_radiuses = self._robot_arm_params_obj.get_tendon_radiuses()
+        self._tendon_radiuses_numpy = self._robot_arm_params_obj._tendon_radiuses_numpy
         self._C = self._robot_arm_params_obj.get_C()
         self._Bbt = self._robot_arm_params_obj.get_Bbt()
         self._Bse = self._robot_arm_params_obj.get_Bse()
@@ -47,6 +48,7 @@ class Robot_Arm_Model:
         self._q = SX.sym('q', 3)
         self._om = SX.sym('om', 3)
         self._b = SX.sym('b', 6)
+        self._lengths = SX.sym('lengths', 3)
 
         self._p_d = SX.sym('p_dot', 3)
         self._eta_d = SX.sym('eta_dot', 4)
@@ -57,6 +59,7 @@ class Robot_Arm_Model:
         self._om_d = SX.sym('om_dot', 3)
         self._alpha_d = SX.sym('alpha_dot', 1)
         self._b_d = SX.sym('boundary_dot', 6)
+        self._lengths_d = SX.sym('lengths_dot', 3)
 
         # Initialise constants
 
@@ -172,6 +175,8 @@ class Robot_Arm_Model:
             0.5*(self._u_dyn[1]*self._eta[0] - self._u_dyn[2]*self._eta[1] + self._u_dyn[0]*self._eta[3]),
             0.5*(self._u_dyn[2]*self._eta[0] + self._u_dyn[1]*self._eta[1] - self._u_dyn[0]*self._eta[2])
         ) + c * self._eta 
+        # n_dot = - (self._f_ext) - self.get_external_distributed_forces()
+        # m_dot = - cross(p_dot, self._n) 
         n_dot = reshape(self._R, 3, 3) @ (self._robot_arm_params_obj.get_mass_distribution()*(skew(self._om)@self._q + self._q_t)) - self._robot_arm_params_obj.get_mass_distribution()*self._g + self._robot_arm_params_obj.get_C()@(self._q*self._q*(1/(1 + SX.exp(-self._growth_rate*self._q)))) - self.get_external_distributed_forces_dyn()
         m_dot = self._robot_arm_params_obj.get_rho() * reshape(self._R, 3, 3) @ (skew(self._om) @ self._robot_arm_params_obj.get_J() @ self._om + self._robot_arm_params_obj.get_J()@self._om_t) - skew(p_dot)@self._n
 
@@ -221,6 +226,8 @@ class Robot_Arm_Model:
 
         """TO DO!"""
 
+        model_name = self._dir_name + 'static_robot_arm_with_boundaries' + self._id 
+
         c = self._k*(1-transpose(self._eta)@self._eta)
 
         u = SX.sym('u')
@@ -236,11 +243,45 @@ class Robot_Arm_Model:
         m_dot = - cross(p_dot, self._n) 
         tau_dot = SX.zeros(self._tau.shape[0])
 
-        b_dot = self.get_tendon_point_force() - vertcat(-(self._f_ext) - self.get_external_distributed_forces(), - cross(p_dot, self._n))
+        b = self.get_tendon_point_force() - vertcat(self._n, self._m)
+        lengths_dot = SX([])
 
-        x = vertcat(self._p, self._eta, self._n, self._m, self._tau, self._b)
+        self.db_dy = jacobian(b, vertcat(self._eta, self._n, self._m, self._tau))
+        self.f_db_dy = Function('f', [vertcat(self._eta, self._n, self._m, self._tau)], [self.db_dy])
+
+        for i in range(self._tau.size()[0]):
+
+            # Currently accounts only for parallel tendons.
+            lengths_dot = vertcat(lengths_dot, norm_2(
+                p_dot + self._R@skew(self._u)@transpose(self._tendon_radiuses[i, :])))
+
+        x = vertcat(self._p, self._eta, self._n, self._m, self._tau, self._lengths)
         xdot = vertcat(p_dot, eta_dot,
-                       n_dot, m_dot, tau_dot, b_dot)
+                       n_dot, m_dot, tau_dot, lengths_dot)
+
+        self._static_model_with_boundaries_ = AcadosModel()
+        self._static_model_with_boundaries_.name = model_name
+        self._static_model_with_boundaries_.x = x 
+        self._static_model_with_boundaries_.f_expl_expr = xdot 
+        self._static_model_with_boundaries_.u = u
+        self._static_model_with_boundaries_.z = SX([])
+
+        sim = AcadosSim()
+        sim.model = self._static_model_with_boundaries_ 
+
+        Sf = self._boundary_length
+
+        sim.code_export_directory = model_name
+        sim.solver_options.T = Sf
+        sim.solver_options.integrator_type = 'ERK'
+        sim.solver_options.num_stages = self._integration_stages
+        sim.solver_options.num_steps = 5
+
+        acados_integrator = AcadosSimSolver(sim)
+
+        return acados_integrator
+
+        
 
     def get_external_distributed_forces(self):
 
@@ -302,6 +343,10 @@ class Robot_Arm_Model:
     def get_robot_arm_params(self): 
 
         return self._robot_arm_params_obj
+
+    def get_static_robot_arm_model_with_boundaries_model(self): 
+
+        return self._static_model_with_boundaries_
 
     def get_dynamic_robot_arm_model(self): 
 
