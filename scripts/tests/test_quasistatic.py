@@ -51,15 +51,16 @@ quasi_sim_manager.solve_static()
 
 t0 = time.time()
 
-N = 2000
+N = 100
 # quasi_sim_manager.set_time_step(1e-3)
 
 for i in range(N): 
 
     quasi_sim_manager.apply_tension_differential(np.array([0.2, 0.0, 0.0]))
+    # quasi_sim_manager.apply_length_differential(np.array([0.0001, 0.0, 0.0]))
     
     
-print(quasi_sim_manager.get_simulation_data()[1][0:3, :])
+print(quasi_sim_manager.get_simulation_data()[1][13:, :])
 print("----------------------------------------")
 print(f"Time taken: {(time.time() - t0)/N}")
 

@@ -8,9 +8,8 @@ from generate_robot_arm_parameters import Robot_Arm_Params
 import time
 
 from pyquaternion import Quaternion
-from matplotlib import pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib.animation import FuncAnimation
+import matplotlib.pyplot as plt
+from mpl_toolkits import mplot3d
 
 class Quasistatic_Control_Manager: 
 
@@ -100,18 +99,9 @@ class Quasistatic_Control_Manager:
         self._init_wrench += boundary_dot[:, 0]
         self._init_sol_boundaries[7:13] = self._init_wrench
         self._init_sol_boundaries[13:13+self._num_tendons] = self._current_tau
+        self._lengths_dot = self._L_q@delta_q_tau
         self._t0 += self._time_step
 
-    def apply_length_differential(self, delta_q_l): 
-
-        self.solve_Jacobians()
-        boundary_dot = np.arrray(self._B_q@self._L_q@delta_q_l)
-        self._init_wrench += boundary_dot*self._time_step
-        self._current_tau += self._L_q_pinv@delta_q_l*self._time_step
-        self._init_sol_boundaries[7:13] = self._init_wrench
-        self._init_sol_boundaries[13:13+self._num_tendons] = self._current_tau
-        self._t0 += self._time_step
-    
     def get_simulation_data(self): 
 
         self.solve_full_shape()
