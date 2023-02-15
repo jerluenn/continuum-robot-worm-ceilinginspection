@@ -11,6 +11,7 @@ class Robot_Arm_Params:
         self._time_step = time_step
         self._alpha = alpha
         self._id = _id
+        self._g_direction = 'z'
 
     def from_custom(self, Kse, Kbt):
 
@@ -112,3 +113,7 @@ class Robot_Arm_Params:
     def get_rho(self): 
 
         return self._rho
+
+    def set_gravity_vector(self, vector): 
+
+        self._g_direction = vector

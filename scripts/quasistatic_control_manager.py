@@ -9,7 +9,8 @@ import time
 
 from pyquaternion import Quaternion
 import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.animation as animation
 
 class Quasistatic_Control_Manager: 
 
@@ -37,7 +38,8 @@ class Quasistatic_Control_Manager:
         self._current_full_states = np.zeros((13+self._num_tendons, self._robot_arm_model.get_num_integration_steps()+1))
         self._current_full_states[3, :] = 1
         self._time_step = 1e-2
-        self._t0 = 0.0
+        self._t = 0.0
+        self._history_states = np.zeros((14+self._num_tendons, self._robot_arm_model.get_num_integration_steps()+1, 10000))
 
     def set_time_step(self, time_step):
 
@@ -62,6 +64,13 @@ class Quasistatic_Control_Manager:
             self._integrator_static.set('x', x)
             self._integrator_static.solve()
             self._current_full_states[:, i+1] = self._integrator_static.get('x')
+
+    def save_step(self): 
+
+        step_num = int(self._t/self._time_step) - 1
+        t, dat = self.get_simulation_data()
+        self._history_states[-1, :, step_num] = t
+        self._history_states[:-1, :, step_num] = dat 
 
     def solve_Jacobians(self): 
 
@@ -100,13 +109,13 @@ class Quasistatic_Control_Manager:
         self._init_sol_boundaries[7:13] = self._init_wrench
         self._init_sol_boundaries[13:13+self._num_tendons] = self._current_tau
         self._lengths_dot = self._L_q@delta_q_tau
-        self._t0 += self._time_step
+        self._t += self._time_step
 
     def get_simulation_data(self): 
 
         self.solve_full_shape()
 
-        return self._t0, self._current_full_states
+        return self._t, self._current_full_states
 
     def initialise_static_solver(self, initial_solution): 
 
@@ -174,9 +183,30 @@ class Quasistatic_Control_Manager:
         ax.set_zlabel('Z')
         plt.show()
 
-    def animate(self): 
+    def _update(self, i): 
 
-        pass 
+        self._data.set_data(self._history_states[0, :, i], self._history_states[1, :, i])
+        self._data.set_3d_properties(self._history_states[2, :, i])
+
+    def animate(self, name): 
+
+        step_num = int(self._t/self._time_step)
+        self._history_states = self._history_states[:, :, :step_num]
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d') 
+        animation.writer = animation.writers['ffmpeg']
+        # animation.writer.
+        plt.ioff()
+
+        ax.set_xlim(-0.2, 0.2)
+        ax.set_ylim(-0.2, 0.2)
+        ax.set_zlim(0, 0.2)
+
+        self._data, = ax.plot3D([],[],[])
+
+        ani = animation.FuncAnimation(fig, self._update, frames=range(step_num), interval=self._time_step*1000)
+        ani.save(name + '.mp4')
 
     def eta_to_Rotation_T_matrix(self, eta): 
 

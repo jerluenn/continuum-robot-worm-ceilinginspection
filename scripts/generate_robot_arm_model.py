@@ -64,6 +64,23 @@ class Robot_Arm_Model:
         # Initialise constants
 
         self._g = SX([9.81, 0, 0])
+
+        if self._robot_arm_params_obj._g_direction == 'x': 
+
+            self._g = SX([9.81, 0, 0])
+
+        elif self._robot_arm_params_obj._g_direction == 'y': 
+
+            self._g = SX([0, 9.81, 0])
+
+        elif self._robot_arm_params_obj._g_direction == 'z': 
+
+            self._g = SX([0, 0, 9.81])
+
+        else: 
+
+            pass 
+
         self._f_ext = self._mass_distribution * self._g
         self._Kappa = SX.sym('Kappa', 1)
         self._c0 = (1.5 + self._robot_arm_params_obj.get_alpha())/(self._robot_arm_params_obj.get_time_step()*(1 + self._robot_arm_params_obj.get_alpha()))
