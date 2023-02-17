@@ -49,26 +49,23 @@ quasi_sim_manager.solve_static()
 
 t0 = time.time()
 
-N = 500
+N = 800
 # quasi_sim_manager.set_time_step(1e-3)
+quasi_sim_manager.apply_tension_differential(np.zeros(3))
 
 for i in range(N): 
 
-    quasi_sim_manager.apply_tension_differential(np.array([0.0, 0.3, 0.0]))
-    # quasi_sim_manager.save_step()
+    tension_input = quasi_sim_manager.solve_differential_inverse_kinematics(np.array([[-0.0005, 0.0005]]))
+    quasi_sim_manager.apply_tension_differential(np.array(tension_input))
+    quasi_sim_manager.save_step()
 
-for i in range(N): 
-
-    quasi_sim_manager.apply_tension_differential(np.array([0.4, 0.1, 0.0]))
-    # quasi_sim_manager.save_step()
-    # quasi_sim_manager.apply_length_differential(np.array([0.0001, 0.0, 0.0]))
-    
-print(quasi_sim_manager.get_simulation_data()[1][13:, :])
+print(quasi_sim_manager.get_simulation_data()[1][0:3, -1])    
+print(quasi_sim_manager.get_simulation_data()[1][13:, -1])
 print("----------------------------------------")
 print(f"Time taken: {(time.time() - t0)/N}")
 
 # quasi_sim_manager.print_Jacobians()
 quasi_sim_manager.visualise()
 
-# quasi_sim_manager.animate('test')
+quasi_sim_manager.animate('test')
 
