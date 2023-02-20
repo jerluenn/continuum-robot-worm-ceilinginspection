@@ -17,7 +17,7 @@ from scipy import sparse
 
 class Quasistatic_Control_Manager: 
 
-    def __init__(self, robot_arm_model): 
+    def __init__(self, robot_arm_model, solver): 
 
         self._robot_arm_model = robot_arm_model
         self._robot1 = Multiple_Shooting_Solver(robot_arm_model)
@@ -43,11 +43,21 @@ class Quasistatic_Control_Manager:
         self._time_step = 1e-2
         self._t = 0.0
         self._history_states = np.zeros((14+self._num_tendons, self._robot_arm_model.get_num_integration_steps()+1, 10000))
-        self._initialise_differential_inverse_solver()
+        self._differential_kinematics_solver = solver
 
     def set_time_step(self, time_step):
 
         self._time_step = time_step
+
+    def set_data_diffential_solver(self, p, yref, yref_teminal, states):
+
+        self._differential_kinematics_solver.constraints_set(0, "lbx", states)
+        self._differential_kinematics_solver.constraints_set(0, "ubx", states)
+
+        self._differential_kinematics_solver.cost_set(0, 'yref', yref)
+        self._differential_kinematics_solver.set(0, 'p', p)
+        self._differential_kinematics_solver.set(1, 'p', p)
+        self._differential_kinematics_solver.cost_set(1, 'yref', yref_teminal)
 
     def set_tensions_static_MS_solver(self, tension): 
 
@@ -257,33 +267,16 @@ class Quasistatic_Control_Manager:
         self._db_dyu = self._robot_arm_model.f_db_dy(self._current_states[3:16])@self._s_forw[3:16, 7:13]
         self._db_dq = self._robot_arm_model.f_db_dy(self._current_states[3:16])@self._s_forw[3:16, 13:16]
 
-
-    def _initialise_differential_inverse_solver(self):
-
-        _lambda = 0.0000001
-        self._solver = osqp.OSQP()
-        self._qp_A = sparse.csc_matrix(np.vstack((np.eye(3), np.eye(3), np.eye(3))))
-        self._qp_P = sparse.csc_matrix(np.zeros((3, 3)))
-        self._qp_q = np.zeros(3)
-        self._qp_l = np.zeros(9)
-        self._qp_u = np.zeros(9)
-        self._qp_l_zeros_tau = 1e-5*np.ones(3)
-        self._qp_u_max_tau = 20*np.ones(3)
-        self._eye_lambda = _lambda*np.eye(3)
-        self._solver.setup(P=self._qp_P, q=self._qp_q, A=self._qp_A, l=self._qp_l, u=self._qp_u)
-
     def DM2Arr(self, dm):
         return np.array(dm.full())
 
     def solve_differential_inverse_kinematics(self, task_vel): 
 
-        self._qp_q = -2*task_vel@self._J_q[0:2, :]
-        self._qp_l[0:3] = (self._qp_l_zeros_tau - self._current_states[13:16])/self._time_step
-        self._qp_u[0:3] = (self._qp_u_max_tau - self._current_states[13:16])/self._time_step
-        self._qp_l[3:9] = -5
-        self._qp_u[3:9] = 5
-        self._qp_P.data = self.DM2Arr(np.transpose(self._J_q[0:2, :])@self._J_q[0:2, :] + self._eye_lambda)
-        self._solver.update(q=self.DM2Arr(self._qp_q)[0], l=self._qp_l, u=self._qp_u, Px=self._qp_P.todense())
-        sol = self._solver.solve()
+        states = np.hstack((self._current_states[0:2], self._current_states[13:16]))
+        task_vel_terminal = np.hstack((task_vel*self._time_step + self._current_states[0:2], np.zeros(3)))
+        task_vel = np.hstack((task_vel_terminal, np.zeros(3)))
+        self.set_data_diffential_solver(np.reshape(self._J_q[0:2, :], [6, ], order='F'), task_vel, task_vel_terminal, states)
+        self._differential_kinematics_solver.solve()
+        x = self._differential_kinematics_solver.get(0, 'u')
 
-        return sol.x
+        return x 
