@@ -25,6 +25,7 @@ class Quasistatic_Control_Manager:
         self._integrator_with_boundaries = self._robot_arm_model._create_static_integrator_with_boundaries()
         self._integrator_static_full = self._robot_arm_model._create_static_integrator()
         self._solver_static, self._integrator_static = self._robot1.create_static_solver()
+        self._solver_static_position_boundary, self._integrator_static_position_boundary = self._robot1.create_static_solver_position_boundary()
         self._wrench_lb = -50
         self._wrench_ub = 50
         self._tendon_radiuses = self._robot_arm_model._tendon_radiuses_numpy
@@ -43,6 +44,11 @@ class Quasistatic_Control_Manager:
         self._time_step = 1e-2
         self._t = 0.0
         self._history_states = np.zeros((14+self._num_tendons, self._robot_arm_model.get_num_integration_steps()+1, 10000))
+        self.wrench_lb = -50
+        self.wrench_ub = 50
+        self.pos_ub = 5
+        self.eta_ub = 1.05
+        self.tension_max = 50
         self._differential_kinematics_solver = solver
 
     def set_time_step(self, time_step):
@@ -58,6 +64,14 @@ class Quasistatic_Control_Manager:
         self._differential_kinematics_solver.set(0, 'p', p)
         self._differential_kinematics_solver.set(1, 'p', p)
         self._differential_kinematics_solver.cost_set(1, 'yref', yref_teminal)
+
+    def set_tensions_static_MS_solver_position_boundary(self, tension):
+
+        lbx_0 = np.hstack((-np.ones(3)*self.pos_ub, -np.ones(4)*self.eta_ub, self.wrench_lb*np.ones(6), tension))
+        ubx_0 = np.hstack((np.ones(3)*self.pos_ub, np.ones(4)*self.eta_ub, self.wrench_ub*np.ones(6), tension))  
+
+        self._solver_static_position_boundary.constraints_set(0, 'lbx', lbx_0)
+        self._solver_static_position_boundary.constraints_set(0, 'ubx', ubx_0)
 
     def set_tensions_static_MS_solver(self, tension): 
 
@@ -78,6 +92,19 @@ class Quasistatic_Control_Manager:
             self._integrator_static.set('x', x)
             self._integrator_static.solve()
             self._current_full_states[:, i+1] = self._integrator_static.get('x')
+
+    def solve_full_shape_position_boundary(self): 
+
+        self._current_full_states[0:13, 0] = self._init_pose_plus_wrench
+        self._current_full_states[13: 13+self._num_tendons, 0] = self._current_tau   
+
+        for i in range(self._robot_arm_model.get_num_integration_steps()):
+
+            x = self._current_full_states[:, i]
+            self._integrator_static.set('x', x)
+            self._integrator_static.solve()
+            self._current_full_states[:, i+1] = self._integrator_static.get('x')
+
 
     def save_step(self): 
 
@@ -131,6 +158,22 @@ class Quasistatic_Control_Manager:
 
         return self._t, self._current_full_states
 
+    def initialise_static_solver_position_boundary(self, initial_solution):
+
+        self._solver_static_position_boundary.set(0, 'x', initial_solution)
+
+        subseq_solution = initial_solution
+
+        for i in range(self._robot_arm_model.get_num_integration_steps()): 
+
+            self._integrator_static_position_boundary.set('x', subseq_solution)
+            self._integrator_static_position_boundary.solve()
+            subseq_solution = self._integrator_static_position_boundary.get('x')
+            self._solver_static_position_boundary.set(i+1, 'x', subseq_solution)
+
+        self.INITIALISED_STATIC_SOLVER_POSITION_BOUNDARY = 1
+
+
     def initialise_static_solver(self, initial_solution): 
 
         self._solver_static.set(0, 'x', initial_solution)
@@ -145,6 +188,42 @@ class Quasistatic_Control_Manager:
             self._solver_static.set(i+1, 'x', subseq_solution)
 
         self.INITIALISED_STATIC_SOLVER = 1
+
+    def solve_static_position_boundary(self):
+
+        t = time.time()
+        self._final_sol_viz = np.zeros((3, self._robot_arm_model.get_num_integration_steps()+1))
+
+        if self.INITIALISED_STATIC_SOLVER_POSITION_BOUNDARY:  
+
+            for i in range(self._MAX_ITERATIONS_STATIC): 
+
+                self._solver_static_position_boundary.solve()
+
+                if self._solver_static_position_boundary.get_cost() < 1e-7:
+
+                    print("Number of iterations required: ", i+1)
+                    print("Total time taken: ", (time.time() - t), 's')
+                    print("Time taken per iteration: ", (time.time() - t)/(i+1), "s.")
+                    self._init_sol = self._solver_static_position_boundary.get(0, 'x')
+
+                    for k in range(self._robot_arm_model.get_num_integration_steps()+1):
+
+                        self._final_sol_viz[:, k] = self._solver_static_position_boundary.get(k, 'x')[0:3]
+
+                    self._init_sol_boundaries = np.hstack((self._init_sol, 0*np.ones(3)))
+                    self._integrator_static_full.set('x', self._init_sol)
+                    self._integrator_static_full.solve()
+                    self._init_pose_plus_wrench = self._solver_static_position_boundary.get(0, 'x')[0:13]
+                    self._current_tau = self._solver_static_position_boundary.get(0, 'x')[13:13+self._num_tendons]
+                    print(self._integrator_static_full.get('x'))
+
+                    break
+
+                elif i == self._MAX_ITERATIONS_STATIC - 1 and self._solver_static_position_boundary.get_cost() > 1e-5: 
+
+                    print("DID NOT CONVERGE!")
+        
 
     def solve_static(self): 
 
@@ -180,6 +259,22 @@ class Quasistatic_Control_Manager:
                 elif i == self._MAX_ITERATIONS_STATIC - 1 and self._solver_static.get_cost() > 1e-5: 
 
                     print("DID NOT CONVERGE!")
+
+    def visualise_pb_arm(self): 
+
+        self.solve_full_shape_position_boundary()
+
+        ax = plt.figure().add_subplot(projection='3d')
+        ax.plot(self._current_full_states[0, :], self._current_full_states[1, :], self._current_full_states[2, :])
+
+        # ax.legend()
+        ax.set_xlim(-0.2, 0.2)
+        ax.set_ylim(-0.2, 0.2)
+        ax.set_zlim(0, -0.2)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        plt.show()
 
     def visualise(self): 
 

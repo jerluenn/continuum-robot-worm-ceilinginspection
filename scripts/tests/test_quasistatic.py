@@ -55,25 +55,20 @@ init_sol[3] = 1
 
 quasi_sim_manager = Quasistatic_Control_Manager(robot_arm_model_1, diff_inv_solver)
 
-quasi_sim_manager.initialise_static_solver(init_sol)
-quasi_sim_manager.set_tensions_static_MS_solver([0.0, 0.0, 0])
-quasi_sim_manager.solve_static()
+quasi_sim_manager.initialise_static_solver_position_boundary(init_sol)
+quasi_sim_manager.set_tensions_static_MS_solver_position_boundary([5.0, 0.0, 0])
+quasi_sim_manager.solve_static_position_boundary()
+quasi_sim_manager.visualise_pb_arm()
 
 t0 = time.time()
 
-N = 300
+N = 100
 # quasi_sim_manager.set_time_step(1e-3)
 quasi_sim_manager.apply_tension_differential(np.zeros(3))
 
 for i in range(N): 
 
-    tension_input = quasi_sim_manager.solve_differential_inverse_kinematics(np.array([-0.01, 0.01]))
-    quasi_sim_manager.apply_tension_differential(np.array(tension_input))
-    quasi_sim_manager.save_step()
-
-for i in range(N): 
-
-    tension_input = quasi_sim_manager.solve_differential_inverse_kinematics(np.array([0.02, -0.005]))
+    tension_input = quasi_sim_manager.solve_differential_inverse_kinematics(np.array([-0.05, 0.1]))
     quasi_sim_manager.apply_tension_differential(np.array(tension_input))
     quasi_sim_manager.save_step()
 

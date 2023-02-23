@@ -257,10 +257,12 @@ class Robot_Arm_Model:
             0.5*(self._u[2]*self._eta[0] + self._u[1]*self._eta[1] - self._u[0]*self._eta[2])
         ) + c * self._eta 
         n_dot = - (self._f_ext) - self.get_external_distributed_forces()
+        # n_dot = - (self._f_ext) - self.get_external_distributed_forces_opposite_direction()
         m_dot = - cross(p_dot, self._n) 
         tau_dot = SX.zeros(self._tau.shape[0])
 
         b = self.get_tendon_point_force() - vertcat(self._n, self._m)
+        # b = self.get_tendon_point_force_opposite_direction() - vertcat(self._n, self._m)
         lengths_dot = SX([])
 
         self.db_dy = jacobian(b, vertcat(self._eta, self._n, self._m, self._tau))
@@ -316,7 +318,26 @@ class Robot_Arm_Model:
 
         return f_t 
 
+    def get_external_distributed_forces_opposite_direction(self):
+
+        """TO DO: Documentation"""
+
+        p_dot = reshape(self._R, 3, 3) @ self._v
+
+        p_dotdot = reshape(self._R, 3, 3) @ skew(self._u) @ self._v
+
+        f_t = SX.zeros(3)
+
+        for i in range(self._tau.shape[0]):
+
+            f_t = (self._tau[i]) * (skew(p_dot)@skew(p_dot))@p_dotdot / (norm_2(p_dot)**3)
+
+        return f_t 
+
     def get_tendon_point_force(self):
+
+        # b = self.get_tendon_point_force() + vertcat(self._n, self._m)
+        # b = self.get_tendon_point_force_opposite_direction() + vertcat(self._n, self._m)
 
         W_t = SX.zeros(6)
 
@@ -325,6 +346,18 @@ class Robot_Arm_Model:
         for i in range(self._tau.shape[0]): 
 
             W_t -= vertcat(self._tau[i]*(p_dot/norm_2(p_dot)), self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
+
+        return W_t
+    
+    def get_tendon_point_force_opposite_direction(self):
+
+        W_t = SX.zeros(6)
+
+        p_dot = reshape(self._R, 3, 3) @ self._v
+
+        for i in range(self._tau.shape[0]): 
+
+            W_t += vertcat(self._tau[i]*(p_dot/norm_2(p_dot)), self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
 
         return W_t
 
