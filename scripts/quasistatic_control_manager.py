@@ -29,7 +29,7 @@ class Quasistatic_Control_Manager:
         self._wrench_lb = -50
         self._wrench_ub = 50
         self._tendon_radiuses = self._robot_arm_model._tendon_radiuses_numpy
-        self._MAX_ITERATIONS_STATIC = 1000
+        self._MAX_ITERATIONS_STATIC = 10000
         self._Kse = np.array([self._robot_arm_model.get_robot_arm_params().get_Kse()])[0, :, :]
         self._Kbt = np.array([self._robot_arm_model.get_robot_arm_params().get_Kbt()])[0, :, :]
         self._Kse_inv = np.linalg.inv(self._robot_arm_model.get_robot_arm_params().get_Kse())
@@ -200,7 +200,7 @@ class Quasistatic_Control_Manager:
 
                 self._solver_static_position_boundary.solve()
 
-                if self._solver_static_position_boundary.get_cost() < 1e-7:
+                if self._solver_static_position_boundary.get_cost() < 1e-5:
 
                     print("Number of iterations required: ", i+1)
                     print("Total time taken: ", (time.time() - t), 's')
@@ -270,7 +270,7 @@ class Quasistatic_Control_Manager:
         # ax.legend()
         ax.set_xlim(-0.2, 0.2)
         ax.set_ylim(-0.2, 0.2)
-        ax.set_zlim(0, -0.2)
+        ax.set_zlim(-0.2, 0)
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')

@@ -22,6 +22,7 @@ class Robot_Arm_Model:
 
     def _build_robot_model(self): 
 
+        self._mass_body = self._robot_arm_params_obj.get_mass_body()
         self._mass_distribution = self._robot_arm_params_obj.get_mass_distribution()
         self._Kse = self._robot_arm_params_obj.get_Kse()
         self._Kbt = self._robot_arm_params_obj.get_Kbt()
@@ -76,6 +77,10 @@ class Robot_Arm_Model:
         elif self._robot_arm_params_obj._g_direction == 'z': 
 
             self._g = SX([0, 0, 9.81])
+
+        elif self._robot_arm_params_obj._g_direction == '-z': 
+
+            self._g = SX([0, 0, -9.81])
 
         else: 
 
@@ -142,6 +147,7 @@ class Robot_Arm_Model:
             0.5*(self._u[2]*self._eta[0] + self._u[1]*self._eta[1] - self._u[0]*self._eta[2])
         ) + c * self._eta 
         n_dot = - (self._f_ext) - self.get_external_distributed_forces()
+        # n_dot = - (self._f_ext) - self.get_external_distributed_forces_opposite_direction()
         m_dot = - cross(p_dot, self._n) 
         tau_dot = SX.zeros(self._tau.shape[0])
 
@@ -330,7 +336,7 @@ class Robot_Arm_Model:
 
         for i in range(self._tau.shape[0]):
 
-            f_t = (self._tau[i]) * (skew(p_dot)@skew(p_dot))@p_dotdot / (norm_2(p_dot)**3)
+            f_t += (self._tau[i]) * (skew(p_dot)@skew(p_dot))@p_dotdot / (norm_2(p_dot)**3)
 
         return f_t 
 
@@ -349,7 +355,7 @@ class Robot_Arm_Model:
 
         return W_t
     
-    def get_tendon_point_force_opposite_direction(self):
+    def get_point_force_position_boundary(self):
 
         W_t = SX.zeros(6)
 
@@ -357,7 +363,9 @@ class Robot_Arm_Model:
 
         for i in range(self._tau.shape[0]): 
 
-            W_t += vertcat(self._tau[i]*(p_dot/norm_2(p_dot)), self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
+            W_t += vertcat(-self._tau[i]*(p_dot/norm_2(p_dot)), -self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
+
+        W_t -= vertcat(self._mass_body*self._g, 0, 0, 0)
 
         return W_t
 

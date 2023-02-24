@@ -4,8 +4,9 @@ from casadi import *
 
 class Robot_Arm_Params: 
 
-    def __init__(self, robot_arm_length, time_step, alpha, _id): 
+    def __init__(self, robot_arm_length, time_step, alpha, _id, mass_body): 
 
+        self._mass_body = mass_body
         self._robot_arm_length = robot_arm_length
         self._created = 0 
         self._time_step = time_step
@@ -35,6 +36,10 @@ class Robot_Arm_Params:
         self._rho = rho
         self._J = J 
         self._I = I
+
+    def get_mass_body(self): 
+
+        return self._mass_body
 
     def set_tendon_radiuses(self, r): 
 

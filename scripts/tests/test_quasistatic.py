@@ -19,9 +19,9 @@ from mpl_toolkits.mplot3d import Axes3D
 
 tendon_radiuses_list = [[0.0175, 0, 0], [-0.00875, 0.0151554, 0], [-0.00875, -0.0151554, 0]]
 tendon_radiuses = SX(tendon_radiuses_list)
-robot_arm_1 = Robot_Arm_Params(0.15, 0.05, -0.5, "1")
+robot_arm_1 = Robot_Arm_Params(0.15, 0.05, -0.5, "1", 0.1)
 robot_arm_1.from_solid_rod(0.0005, 100e9, 200e9, 8000)
-robot_arm_1.set_gravity_vector('z')
+robot_arm_1.set_gravity_vector('-z')
 C = np.diag([0.000, 0.000, 0.000])
 Bbt = np.diag([1e-4, 1e-4, 1e-4])
 Bse = Bbt
@@ -50,13 +50,20 @@ initial_solution[3] = 1
 
 init_sol = np.zeros(16)
 init_sol[3] = 1
+init_sol[2] = -0.15
+init_sol[9] = -19
+
+# init_sol = np.array([ 2.48325142e-02, -3.11193014e-03,  1.46443802e-01, -2.30452729e-02,
+#         9.66653197e-01, -4.44862301e-02, -2.51140405e-01,  2.41735197e+00,
+#        -3.34391622e-01,  1.42101669e+00, -1.03478262e-02, -8.61231730e-02,
+#         5.94504356e-03,  5.00000000e+00,  3.41327957e-12,  3.41326365e-12])
 
 # integrator = robot_arm_model_1._create_static_integrator_with_boundaries()
 
 quasi_sim_manager = Quasistatic_Control_Manager(robot_arm_model_1, diff_inv_solver)
 
 quasi_sim_manager.initialise_static_solver_position_boundary(init_sol)
-quasi_sim_manager.set_tensions_static_MS_solver_position_boundary([5.0, 0.0, 0])
+quasi_sim_manager.set_tensions_static_MS_solver_position_boundary([12.0, 7.0, 0])
 quasi_sim_manager.solve_static_position_boundary()
 quasi_sim_manager.visualise_pb_arm()
 

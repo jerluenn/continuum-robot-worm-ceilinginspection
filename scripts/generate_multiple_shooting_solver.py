@@ -23,6 +23,7 @@ class Multiple_Shooting_Solver:
         self.ocp = AcadosOcp()
         self.ocp.model = self._robot_arm_model.get_static_robot_arm_model()
         self.nx = self.ocp.model.x.size()[0]
+        self.ocp.model.name = 'static_solver_position_boundary'
         nu = self.ocp.model.u.size()[0]
         ny = self.nx + nu
 
@@ -31,10 +32,10 @@ class Multiple_Shooting_Solver:
 
         self.ocp.dims.N = self._integration_steps
         self.ocp.solver_options.qp_solver_iter_max = 400
-        self.ocp.cost.cost_type_e = 'NONLINEAR_LS'
-        self.ocp.model.cost_y_expr_e = vertcat(self._robot_arm_model.get_tendon_point_force() - x[7:13])
-        self.ocp.cost.W_e = np.identity(6)
-        self.ocp.cost.yref_e = np.zeros((6))
+        self.ocp.cost.cost_type_0 = 'NONLINEAR_LS'
+        self.ocp.model.cost_y_expr_0 = vertcat(self._robot_arm_model.get_point_force_position_boundary() - x[7:13])
+        self.ocp.cost.W_0 = np.identity(6)
+        self.ocp.cost.yref_0 = np.zeros((6))
 
         self.ocp.solver_options.sim_method_num_steps = self._integration_steps
         self.ocp.solver_options.qp_solver_warm_start = 2
