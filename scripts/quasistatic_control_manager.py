@@ -162,14 +162,15 @@ class Quasistatic_Control_Manager:
         self.compute_boundary_Jacobians_pend()
         self._db_pend_dyu_pinv = np.linalg.pinv(self._db_pend_dyu)
         self._boundary_conditions = self.compute_boundary_conditions_position_boundary(R, self._init_sol_boundaries[7:10], self._init_sol_boundaries[10:13], self._init_sol_boundaries[13:13+self._num_tendons])
-        self._B_q = - self._db_pend_dyu_pinv@self._db_pend_dq
         self._dpose_0_dpose_l = np.linalg.pinv(self._s_forw[0:7, 0:7])
         A = self._dpose_dq
-        B = - self._dpose_dyu@self._db_pend_dyu_pinv@self._db_pend_dq
-        C = - self._dpose_dyu@self._db_pend_dyu_pinv@self._db_pend_dpose
+        dpdb = self._dpose_dyu@self._db_pend_dyu_pinv
+        B = dpdb@self._db_pend_dq
+        C = dpdb@self._db_pend_dpose
         D = self._dpose_dpose_0 
         # D = 0
         self._J_q = np.linalg.pinv(C-D)@(A-B)
+        self._B_q = - self._db_pend_dyu_pinv@(self._db_pend_dq + self._db_pend_dpose@self._J_q)
         # self._J_q = (self._dpose_0_dpose_l)@(self._dpose_dyu@(-self._B_q) - self._dpose_dq)
         self._L_q = self._s_forw[16:19, 13:16] + self._s_forw[16:19, 7:13]@self._B_q 
         self._L_q_pinv = np.linalg.pinv(self._L_q)
@@ -177,11 +178,31 @@ class Quasistatic_Control_Manager:
 
     def solve_differential_inverse_kinematics_position_boundary(self): 
 
-        pass 
+        pass
 
-    def apply_tension_differential_position_boundary(self): 
+    def apply_tension_differential_position_boundary(self, delta_q_tau): 
 
-        pass 
+        self.solve_Jacobians_position_boundary()
+        boundary_dot = np.array(self._B_q@delta_q_tau*self._time_step)
+        pose_dot = np.array(self._J_q@delta_q_tau*self._time_step)
+        self._current_tau += delta_q_tau*self._time_step
+        self._init_wrench += boundary_dot[:, 0]
+        self._init_sol_boundaries[0:7] += pose_dot[:, 0]
+        self._init_sol_boundaries[7:13] = self._init_wrench
+        self._init_sol_boundaries[13:13+self._num_tendons] = self._current_tau
+        self._lengths_dot = self._L_q@delta_q_tau
+        self._t += self._time_step
+
+    def print_Jacobians_position_boundary(self): 
+
+        print('Boundary conditions: ', self._boundary_conditions)
+        print("dpose_dyu : ", self._dpose_dyu)
+        print("dpose_dq  : ", self._dpose_dq)
+        print("db_dyu_pinv: ", self._db_pend_dyu_pinv)
+        print("db_dq : ", self._db_pend_dq)
+        print("J_q: ", self._J_q)
+        print("J_l: ", self._J_l)
+
 
     def print_Jacobians(self): 
 
@@ -267,6 +288,7 @@ class Quasistatic_Control_Manager:
                     self._integrator_static_full.set('x', self._init_sol)
                     self._integrator_static_full.solve()
                     self._init_pose_plus_wrench = self._solver_static_position_boundary.get(0, 'x')[0:13]
+                    self._init_wrench = self._solver_static_position_boundary.get(0, 'x')[7:13]
                     self._current_tau = self._solver_static_position_boundary.get(0, 'x')[13:13+self._num_tendons]
                     print(self._integrator_static_full.get('x'))
 
