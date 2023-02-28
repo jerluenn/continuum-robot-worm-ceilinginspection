@@ -131,6 +131,53 @@ class Quasistatic_Control_Manager:
         self._L_q_pinv = np.linalg.pinv(self._L_q)
         self._J_l = self._J_q@self._L_q_pinv
 
+    def compute_boundary_conditions_position_boundary(self, R, n, m, tau): 
+
+        R_T = np.transpose(R)
+        v = self._e3 + self._Kse_inv@R_T@n
+
+        boundary_conditions = np.zeros(6)
+        boundary_conditions -= self._robot_arm_model._mass_body*np.array([0, 0, -9.81, 0, 0, 0])
+
+        for i in range(self._num_tendons): 
+
+            tmp = -tau[i]*(R@v)/np.linalg.norm(R@v)
+            boundary_conditions[0:3] += tmp
+            boundary_conditions[3:6] += self._skew(R@self._tendon_radiuses[i, :])@tmp
+
+        boundary_conditions = boundary_conditions - np.hstack((n, m))
+
+        return boundary_conditions
+
+    def solve_Jacobians_position_boundary(self): 
+
+        self._integrator_with_boundaries.set('x', self._init_sol_boundaries)
+        self._integrator_with_boundaries.solve()
+        self._s_forw = self._integrator_with_boundaries.get('S_forw')
+        self._dpose_dyu = self._s_forw[0:7, 7:13]
+        self._dpose_dq = self._s_forw[0:7, 13:16] 
+        self._dpose_dpose_0 = self._s_forw[0:7, 0:7]
+        self._current_states = self._integrator_with_boundaries.get('x')
+        R = self.eta_to_Rotation_T_matrix(self._init_sol_boundaries[3:7])
+        self.compute_boundary_Jacobians_pend()
+        self._db_pend_dyu_pinv = np.linalg.pinv(self._db_pend_dyu)
+        self._boundary_conditions = self.compute_boundary_conditions_position_boundary(R, self._init_sol_boundaries[7:10], self._init_sol_boundaries[10:13], self._init_sol_boundaries[13:13+self._num_tendons])
+        self._B_q = - self._db_pend_dyu_pinv@self._db_pend_dq
+        self._dpose_0_dpose_l = np.linalg.pinv(self._s_forw[0:7, 0:7])
+        self._J_q = (pinv(self._db_pend_dpose)@self._db_pend_dq - self._dpose_dq)
+        # self._J_q = (self._dpose_0_dpose_l)@(self._dpose_dyu@(-self._B_q) - self._dpose_dq)
+        self._L_q = self._s_forw[16:19, 13:16] + self._s_forw[16:19, 7:13]@self._B_q 
+        self._L_q_pinv = np.linalg.pinv(self._L_q)
+        self._J_l = self._J_q@self._L_q_pinv
+
+    def solve_differential_inverse_kinematics_position_boundary(self): 
+
+        pass 
+
+    def apply_tension_differential_position_boundary(self): 
+
+        pass 
+
     def print_Jacobians(self): 
 
         print('Boundary conditions: ', self._boundary_conditions)
@@ -200,7 +247,7 @@ class Quasistatic_Control_Manager:
 
                 self._solver_static_position_boundary.solve()
 
-                if self._solver_static_position_boundary.get_cost() < 1e-5:
+                if self._solver_static_position_boundary.get_cost() < 1e-7:
 
                     print("Number of iterations required: ", i+1)
                     print("Total time taken: ", (time.time() - t), 's')
@@ -361,6 +408,12 @@ class Quasistatic_Control_Manager:
 
         self._db_dyu = self._robot_arm_model.f_db_dy(self._current_states[3:16])@self._s_forw[3:16, 7:13]
         self._db_dq = self._robot_arm_model.f_db_dy(self._current_states[3:16])@self._s_forw[3:16, 13:16]
+
+    def compute_boundary_Jacobians_pend(self): 
+
+        self._db_pend_dyu = self._robot_arm_model.f_db_pend_dy(self._init_sol_boundaries[0:16])[:, 7:13] 
+        self._db_pend_dq = self._robot_arm_model.f_db_pend_dy(self._init_sol_boundaries[0:16])[:, 13:16]
+        self._db_pend_dpose = self._robot_arm_model.f_db_pend_dy(self._init_sol_boundaries[0:16])[:, 0:7]
 
     def DM2Arr(self, dm):
         return np.array(dm.full())

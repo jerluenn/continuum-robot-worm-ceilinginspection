@@ -267,9 +267,13 @@ class Robot_Arm_Model:
         m_dot = - cross(p_dot, self._n) 
         tau_dot = SX.zeros(self._tau.shape[0])
 
+        b_pendulum = self.get_point_force_position_boundary() - vertcat(self._n, self._m)
         b = self.get_tendon_point_force() - vertcat(self._n, self._m)
         # b = self.get_tendon_point_force_opposite_direction() - vertcat(self._n, self._m)
         lengths_dot = SX([])
+
+        self.db_pend_dy = jacobian(b_pendulum, vertcat(self._p, self._eta, self._n, self._m, self._tau))
+        self.f_db_pend_dy = Function('f', [vertcat(self._p, self._eta, self._n, self._m, self._tau)], [self.db_pend_dy])
 
         self.db_dy = jacobian(b, vertcat(self._eta, self._n, self._m, self._tau))
         self.f_db_dy = Function('f', [vertcat(self._eta, self._n, self._m, self._tau)], [self.db_dy])

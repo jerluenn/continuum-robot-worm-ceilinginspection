@@ -51,7 +51,7 @@ initial_solution[3] = 1
 init_sol = np.zeros(16)
 init_sol[3] = 1
 init_sol[2] = -0.15
-init_sol[9] = -19
+init_sol[9] = -0
 
 # init_sol = np.array([ 2.48325142e-02, -3.11193014e-03,  1.46443802e-01, -2.30452729e-02,
 #         9.66653197e-01, -4.44862301e-02, -2.51140405e-01,  2.41735197e+00,
@@ -63,30 +63,32 @@ init_sol[9] = -19
 quasi_sim_manager = Quasistatic_Control_Manager(robot_arm_model_1, diff_inv_solver)
 
 quasi_sim_manager.initialise_static_solver_position_boundary(init_sol)
-quasi_sim_manager.set_tensions_static_MS_solver_position_boundary([12.0, 7.0, 0])
+quasi_sim_manager.set_tensions_static_MS_solver_position_boundary([1.6, 0.0, 0])
 quasi_sim_manager.solve_static_position_boundary()
 quasi_sim_manager.visualise_pb_arm()
 
 t0 = time.time()
 
+quasi_sim_manager.solve_Jacobians_position_boundary()
+
 N = 100
 # quasi_sim_manager.set_time_step(1e-3)
-quasi_sim_manager.apply_tension_differential(np.zeros(3))
+# quasi_sim_manager.apply_tension_differential(np.zeros(3))
 
-for i in range(N): 
+# for i in range(N): 
 
-    tension_input = quasi_sim_manager.solve_differential_inverse_kinematics(np.array([-0.05, 0.1]))
-    quasi_sim_manager.apply_tension_differential(np.array(tension_input))
-    quasi_sim_manager.save_step()
+#     tension_input = quasi_sim_manager.solve_differential_inverse_kinematics(np.array([-0.05, 0.1]))
+#     quasi_sim_manager.apply_tension_differential(np.array(tension_input))
+#     quasi_sim_manager.save_step()
 
 
-print(quasi_sim_manager.get_simulation_data()[1][0:3, -1])    
-print(quasi_sim_manager.get_simulation_data()[1][13:, -1])
-print("----------------------------------------")
-print(f"Time taken: {(time.time() - t0)/N}")
+# print(quasi_sim_manager.get_simulation_data()[1][0:3, -1])    
+# print(quasi_sim_manager.get_simulation_data()[1][13:, -1])
+# print("----------------------------------------")
+# print(f"Time taken: {(time.time() - t0)/N}")
 
-# quasi_sim_manager.print_Jacobians()
-quasi_sim_manager.visualise()
+# # quasi_sim_manager.print_Jacobians()
+# quasi_sim_manager.visualise()
 
-quasi_sim_manager.animate('test')
+# quasi_sim_manager.animate('test')
 
