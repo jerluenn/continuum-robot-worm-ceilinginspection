@@ -164,7 +164,12 @@ class Quasistatic_Control_Manager:
         self._boundary_conditions = self.compute_boundary_conditions_position_boundary(R, self._init_sol_boundaries[7:10], self._init_sol_boundaries[10:13], self._init_sol_boundaries[13:13+self._num_tendons])
         self._B_q = - self._db_pend_dyu_pinv@self._db_pend_dq
         self._dpose_0_dpose_l = np.linalg.pinv(self._s_forw[0:7, 0:7])
-        self._J_q = (pinv(self._db_pend_dpose)@self._db_pend_dq - self._dpose_dq)
+        A = self._dpose_dq
+        B = - self._dpose_dyu@self._db_pend_dyu_pinv@self._db_pend_dq
+        C = - self._dpose_dyu@self._db_pend_dyu_pinv@self._db_pend_dpose
+        D = self._dpose_dpose_0 
+        # D = 0
+        self._J_q = np.linalg.pinv(C-D)@(A-B)
         # self._J_q = (self._dpose_0_dpose_l)@(self._dpose_dyu@(-self._B_q) - self._dpose_dq)
         self._L_q = self._s_forw[16:19, 13:16] + self._s_forw[16:19, 7:13]@self._B_q 
         self._L_q_pinv = np.linalg.pinv(self._L_q)

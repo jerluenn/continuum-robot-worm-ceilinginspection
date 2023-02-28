@@ -63,7 +63,7 @@ init_sol[9] = -0
 quasi_sim_manager = Quasistatic_Control_Manager(robot_arm_model_1, diff_inv_solver)
 
 quasi_sim_manager.initialise_static_solver_position_boundary(init_sol)
-quasi_sim_manager.set_tensions_static_MS_solver_position_boundary([1.6, 0.0, 0])
+quasi_sim_manager.set_tensions_static_MS_solver_position_boundary([0.5, 0.0, 0])
 quasi_sim_manager.solve_static_position_boundary()
 quasi_sim_manager.visualise_pb_arm()
 
