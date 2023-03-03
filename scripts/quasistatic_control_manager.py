@@ -83,7 +83,7 @@ class Quasistatic_Control_Manager:
 
     def solve_full_shape(self): 
 
-        self._current_full_states[7:13, 0] = self._init_wrench
+        self._current_full_states[7:13, 0] = self._init_wrench.full()[:,0]
         self._current_full_states[13: 13+self._num_tendons, 0] = self._current_tau
 
         for i in range(self._robot_arm_model.get_num_integration_steps()):
@@ -95,7 +95,7 @@ class Quasistatic_Control_Manager:
 
     def solve_full_shape_position_boundary(self): 
 
-        self._current_full_states[0:13, 0] = self._init_pose_plus_wrench
+        self._current_full_states[0:13, 0] = self._init_sol_boundaries[0:13]
         self._current_full_states[13: 13+self._num_tendons, 0] = self._current_tau   
 
         for i in range(self._robot_arm_model.get_num_integration_steps()):
@@ -168,33 +168,56 @@ class Quasistatic_Control_Manager:
         B = dpdb@self._db_pend_dq
         C = dpdb@self._db_pend_dpose
         D = self._dpose_dpose_0 
-        # D = 0
         self._J_q = np.linalg.pinv(C-D)@(A-B)
         self._B_q = - self._db_pend_dyu_pinv@(self._db_pend_dq + self._db_pend_dpose@self._J_q)
-        # self._J_q = (self._dpose_0_dpose_l)@(self._dpose_dyu@(-self._B_q) - self._dpose_dq)
-        self._L_q = self._s_forw[16:19, 13:16] + self._s_forw[16:19, 7:13]@self._B_q 
+        self._L_q = self._s_forw[16:19, 13:16] + self._s_forw[16:19, 7:13]@self._B_q + self._s_forw[16:19, 0:7]@self._J_q
         self._L_q_pinv = np.linalg.pinv(self._L_q)
         self._J_l = self._J_q@self._L_q_pinv
 
-    def solve_differential_inverse_kinematics_position_boundary(self): 
+    def solve_differential_inverse_kinematics(self, task_vel): 
 
-        pass
+        states = np.hstack((self._current_states[0:2], self._current_states[13:16]))
+        task_vel_terminal = np.hstack((task_vel*self._time_step + self._current_states[0:2], np.zeros(3)))
+        task_vel = np.hstack((task_vel_terminal, np.zeros(3)))
+        self.set_data_diffential_solver(np.reshape(self._J_q[0:2, :], [6, ], order='F'), task_vel, task_vel_terminal, states)
+        self._differential_kinematics_solver.solve()
+        x = self._differential_kinematics_solver.get(0, 'u')
+
+        return x 
+    
+    def solve_differential_inverse_kinematics_position_boundary(self, task_vel): 
+
+        states = np.hstack((self._init_sol_boundaries[0:2], self._current_states[13:16]))
+        task_vel_terminal = np.hstack((task_vel*self._time_step + self._init_sol_boundaries[0:2], np.zeros(3)))
+        task_vel = np.hstack((task_vel_terminal, np.zeros(3)))
+        self.set_data_diffential_solver(np.reshape(self._J_q[0:2, :], [6, ], order='F'), task_vel, task_vel_terminal, states)
+        self._differential_kinematics_solver.solve()
+        x = self._differential_kinematics_solver.get(0, 'u')
+
+        return x 
+
 
     def apply_tension_differential_position_boundary(self, delta_q_tau): 
 
+        lyapGain = 1
         self.solve_Jacobians_position_boundary()
         boundary_dot = np.array(self._B_q@delta_q_tau*self._time_step)
         pose_dot = np.array(self._J_q@delta_q_tau*self._time_step)
+        self._aug_plus_x0 = -self._db_pend_dyu_pinv@(lyapGain*self._boundary_conditions + self._db_pend_dpose@pose_dot@self._time_step + self._db_pend_dq@delta_q_tau@self._time_step)
+        # self._aug_plus_x0 = 0
         self._current_tau += delta_q_tau*self._time_step
-        self._init_wrench += boundary_dot[:, 0]
+        self._init_wrench += (boundary_dot[:, 0] + self._aug_plus_x0@self._time_step)
+        # self._init_wrench += boundary_dot[:, 0] 
         self._init_sol_boundaries[0:7] += pose_dot[:, 0]
-        self._init_sol_boundaries[7:13] = self._init_wrench
+        self._init_sol_boundaries[7:13] = self._init_wrench.full()[:, 0]
+        # self._init_sol_boundaries[7:13] = self._init_wrench
         self._init_sol_boundaries[13:13+self._num_tendons] = self._current_tau
         self._lengths_dot = self._L_q@delta_q_tau
         self._t += self._time_step
 
-    def print_Jacobians_position_boundary(self): 
 
+    def print_Jacobians_position_boundary(self): 
+        
         print('Boundary conditions: ', self._boundary_conditions)
         print("dpose_dyu : ", self._dpose_dyu)
         print("dpose_dq  : ", self._dpose_dq)
@@ -213,6 +236,15 @@ class Quasistatic_Control_Manager:
         print("db_dq : ", self._db_dq)
         print("J_q: ", self._J_q)
         print("J_l: ", self._J_l)
+
+    def print_states(self): 
+
+        print(self._current_states)
+
+
+    def print_states_position_boundary(self): 
+
+        print(self._init_sol_boundaries)
 
     def apply_tension_differential(self, delta_q_tau): 
 
@@ -273,7 +305,7 @@ class Quasistatic_Control_Manager:
 
                 self._solver_static_position_boundary.solve()
 
-                if self._solver_static_position_boundary.get_cost() < 1e-7:
+                if self._solver_static_position_boundary.get_cost() < 1e-8:
 
                     print("Number of iterations required: ", i+1)
                     print("Total time taken: ", (time.time() - t), 's')
@@ -344,7 +376,7 @@ class Quasistatic_Control_Manager:
         # ax.legend()
         ax.set_xlim(-0.2, 0.2)
         ax.set_ylim(-0.2, 0.2)
-        ax.set_zlim(-0.2, 0)
+        ax.set_zlim(-0.4, 0)
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
@@ -384,7 +416,7 @@ class Quasistatic_Control_Manager:
 
         ax.set_xlim(-0.2, 0.2)
         ax.set_ylim(-0.2, 0.2)
-        ax.set_zlim(0, 0.2)
+        ax.set_zlim(-0.4, 0.0)
 
         self._data, = ax.plot3D([],[],[])
 
@@ -445,13 +477,3 @@ class Quasistatic_Control_Manager:
     def DM2Arr(self, dm):
         return np.array(dm.full())
 
-    def solve_differential_inverse_kinematics(self, task_vel): 
-
-        states = np.hstack((self._current_states[0:2], self._current_states[13:16]))
-        task_vel_terminal = np.hstack((task_vel*self._time_step + self._current_states[0:2], np.zeros(3)))
-        task_vel = np.hstack((task_vel_terminal, np.zeros(3)))
-        self.set_data_diffential_solver(np.reshape(self._J_q[0:2, :], [6, ], order='F'), task_vel, task_vel_terminal, states)
-        self._differential_kinematics_solver.solve()
-        x = self._differential_kinematics_solver.get(0, 'u')
-
-        return x 

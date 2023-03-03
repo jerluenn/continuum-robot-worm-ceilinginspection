@@ -15,7 +15,7 @@ class Robot_Arm_Model:
 
         self._dir_name = 'c_generated_code_' 
         self._robot_arm_params_obj = robot_arm_params
-        self._integration_steps = 10
+        self._integration_steps = 20
         self._integration_stages = 4
         self._build_robot_model()
 
@@ -304,7 +304,7 @@ class Robot_Arm_Model:
         sim.solver_options.T = Sf
         sim.solver_options.integrator_type = 'ERK'
         sim.solver_options.num_stages = self._integration_stages
-        sim.solver_options.num_steps = 5
+        sim.solver_options.num_steps = self._integration_steps
 
         acados_integrator = AcadosSimSolver(sim)
 
