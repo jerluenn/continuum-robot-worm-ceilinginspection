@@ -266,6 +266,7 @@ class Robot_Arm_Model:
         # n_dot = - (self._f_ext) - self.get_external_distributed_forces_opposite_direction()
         m_dot = - cross(p_dot, self._n) 
         tau_dot = SX.zeros(self._tau.shape[0])
+        tau_other = SX.sym("tau_other", 3)
 
         b_pendulum = self.get_point_force_position_boundary() - vertcat(self._n, self._m)
         b = self.get_tendon_point_force() - vertcat(self._n, self._m)
@@ -287,6 +288,7 @@ class Robot_Arm_Model:
         x = vertcat(self._p, self._eta, self._n, self._m, self._tau, self._lengths)
         xdot = vertcat(p_dot, eta_dot,
                        n_dot, m_dot, tau_dot, lengths_dot)
+        p = tau_other
 
         self._static_model_with_boundaries_ = AcadosModel()
         self._static_model_with_boundaries_.name = model_name
@@ -294,6 +296,7 @@ class Robot_Arm_Model:
         self._static_model_with_boundaries_.f_expl_expr = xdot 
         self._static_model_with_boundaries_.u = u
         self._static_model_with_boundaries_.z = SX([])
+        self._static_model_with_boundaries_.p = p
 
         sim = AcadosSim()
         sim.model = self._static_model_with_boundaries_ 
@@ -309,8 +312,6 @@ class Robot_Arm_Model:
         acados_integrator = AcadosSimSolver(sim)
 
         return acados_integrator
-
-        
 
     def get_external_distributed_forces(self):
 
@@ -364,6 +365,26 @@ class Robot_Arm_Model:
         W_t = SX.zeros(6)
 
         p_dot = reshape(self._R, 3, 3) @ self._v
+
+        for i in range(self._tau.shape[0]): 
+
+            W_t += vertcat(-self._tau[i]*(p_dot/norm_2(p_dot)), -self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
+
+        W_t -= vertcat(self._mass_body*self._g, 0, 0, 0)
+
+        return W_t
+
+    def get_point_force_full_robot_body(self): 
+
+        W_t = SX.zeros(6)
+
+        p_dot = reshape(self._R, 3, 3) @ self._v
+
+        for i in range(self._tau.shape[0]): 
+
+            W_t += vertcat(-self._tau[i]*(p_dot/norm_2(p_dot)), -self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
+
+        # Over here we need to change the sign
 
         for i in range(self._tau.shape[0]): 
 

@@ -17,10 +17,10 @@ from mpl_toolkits.mplot3d import Axes3D
 
 ### SETTING UP SOLVER ###
 
-tendon_radiuses_list = [[0.0175, 0, 0], [-0.00875, 0.0151554, 0], [-0.00875, -0.0151554, 0]]
+tendon_radiuses_list = [[0.0275, 0, 0], [-0.00875*1.5714285714285714, 0.0151554*1.5714285714285714, 0], [-0.00875*1.5714285714285714, -0.0151554*1.5714285714285714, 0]]
 tendon_radiuses = SX(tendon_radiuses_list)
-robot_arm_1 = Robot_Arm_Params(0.15, 0.05, -0.5, "1", 0.1)
-robot_arm_1.from_solid_rod(0.0005, 100e9, 200e9, 8000)
+robot_arm_1 = Robot_Arm_Params(0.2, 0.05, -0.5, "1", 0.4)
+robot_arm_1.from_solid_rod(0.0005, 50e9, 100e9, 8000)
 robot_arm_1.set_gravity_vector('-z')
 C = np.diag([0.000, 0.000, 0.000])
 Bbt = np.diag([1e-4, 1e-4, 1e-4])
@@ -32,15 +32,15 @@ robot_arm_1.set_damping_factor(Bbt, Bse)
 robot_arm_1.set_tendon_radiuses(tendon_radiuses_list)
 robot_arm_model_1 = Robot_Arm_Model(robot_arm_1)
 
-Q_w_p = 1000e3*np.eye(2)
-Q_w_t = 1e-1*np.eye(3)
+Q_w_p = 1000e4*np.eye(2)
+Q_w_t = 1e-3*np.eye(3)
 n_states = 2
 n_tendons = 3
 name = 'single_controller'
-R_mat = 1e-2*np.eye(3)
+R_mat = 1e-4*np.eye(3)
 Tf = 0.01
-q_max = 20 
-q_dot_max = 5
+q_max = 40
+q_dot_max = 3
 
 diff_inv = Linear_MPC(Q_w_p, Q_w_t, n_states, n_tendons,q_dot_max, q_max, name, R_mat, Tf)
 diff_inv_solver, _ = diff_inv.create_inverse_differential_kinematics()
@@ -70,27 +70,31 @@ quasi_sim_manager.solve_static_position_boundary()
 t0 = time.time()
 
 quasi_sim_manager.solve_Jacobians_position_boundary()
+# quasi_sim_manager.set_time_step(0.002)
 
-N = 100
+N = 600
 # quasi_sim_manager.set_time_step(1e-3)
 # quasi_sim_manager.apply_tension_differential(np.zeros(3))
 
 for i in range(N): 
 
-    # tension_input = quasi_sim_manager.solve_differential_inverse_kinematics(np.array([-0.05, 0.1]))
+    tension_input = quasi_sim_manager.solve_differential_inverse_kinematics_position_boundary(np.array([-0.001, 0.01]))
     # quasi_sim_manager.apply_tension_differential(np.array(tension_input))
-    quasi_sim_manager.apply_tension_differential_position_boundary(np.array([1.5, 0, 0]))
-    quasi_sim_manager.print_Jacobians_position_boundary()
-    quasi_sim_manager.save_step()
+    quasi_sim_manager.apply_tension_differential_position_boundary(np.array(tension_input))
+    print(quasi_sim_manager._boundary_conditions)
+    # print(quasi_sim_manager._J_q@tension_input)
+    # quasi_sim_manager.print_Jacobians_position_boundary()
+    # quasi_sim_manager.save_step()
 
 
 # print(quasi_sim_manager.get_simulation_data()[1][0:3, -1])    
 # print(quasi_sim_manager.get_simulation_data()[1][13:, -1])
 # print("----------------------------------------")
-# print(f"Time taken: {(time.time() - t0)/N}")
+print(f"Time taken: {(time.time() - t0)/N}")
 
-quasi_sim_manager.print_Jacobians()
-# quasi_sim_manager.visualise()
+quasi_sim_manager.print_Jacobians_position_boundary()
+quasi_sim_manager.print_states_position_boundary()
+quasi_sim_manager.visualise_pb_arm()
 
 # quasi_sim_manager.animate('test')
 

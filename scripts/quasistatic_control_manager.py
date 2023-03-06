@@ -199,7 +199,7 @@ class Quasistatic_Control_Manager:
 
     def apply_tension_differential_position_boundary(self, delta_q_tau): 
 
-        lyapGain = 1
+        lyapGain = 3.5
         self.solve_Jacobians_position_boundary()
         boundary_dot = np.array(self._B_q@delta_q_tau*self._time_step)
         pose_dot = np.array(self._J_q@delta_q_tau*self._time_step)
