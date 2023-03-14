@@ -66,9 +66,9 @@ class Quasistatic_Control_Manager:
         self._differential_kinematics_solver.cost_set(1, 'yref', yref_teminal)
 
     def set_tensions_static_MS_solver_position_boundary(self, tension):
-
-        lbx_0 = np.hstack((-np.ones(3)*self.pos_ub, -np.ones(4)*self.eta_ub, self.wrench_lb*np.ones(6), tension))
-        ubx_0 = np.hstack((np.ones(3)*self.pos_ub, np.ones(4)*self.eta_ub, self.wrench_ub*np.ones(6), tension))  
+        
+        lbx_0 = np.hstack((np.array([0, 0, 0, 1, 0, 0, 0]), self.wrench_lb*np.ones(6), tension))
+        ubx_0 = np.hstack((np.array([0, 0, 0, 1, 0, 0, 0]), -self.wrench_lb*np.ones(6), tension))
 
         self._solver_static_position_boundary.constraints_set(0, 'lbx', lbx_0)
         self._solver_static_position_boundary.constraints_set(0, 'ubx', ubx_0)
@@ -83,7 +83,7 @@ class Quasistatic_Control_Manager:
 
     def solve_full_shape(self): 
 
-        self._current_full_states[7:13, 0] = self._init_wrench.full()[:,0]
+        self._current_full_states[7:13, 0] = self._init_wrench
         self._current_full_states[13: 13+self._num_tendons, 0] = self._current_tau
 
         for i in range(self._robot_arm_model.get_num_integration_steps()):
@@ -137,13 +137,13 @@ class Quasistatic_Control_Manager:
         v = self._e3 + self._Kse_inv@R_T@n
 
         boundary_conditions = np.zeros(6)
-        boundary_conditions -= self._robot_arm_model._mass_body*np.array([0, 0, -9.81, 0, 0, 0])
+        boundary_conditions += self._robot_arm_model._mass_body*np.array([0, 0, 9.81, 0, 0, 0])
 
         for i in range(self._num_tendons): 
 
-            tmp = -tau[i]*(R@v)/np.linalg.norm(R@v)
+            tmp = -tau[i]*(-R@v)/np.linalg.norm(R@v)
             boundary_conditions[0:3] += tmp
-            boundary_conditions[3:6] += self._skew(R@self._tendon_radiuses[i, :])@tmp
+            boundary_conditions[3:6] -= self._skew(R@self._tendon_radiuses[i, :])@tmp
 
         boundary_conditions = boundary_conditions - np.hstack((n, m))
 
@@ -158,19 +158,13 @@ class Quasistatic_Control_Manager:
         self._dpose_dq = self._s_forw[0:7, 13:16] 
         self._dpose_dpose_0 = self._s_forw[0:7, 0:7]
         self._current_states = self._integrator_with_boundaries.get('x')
-        R = self.eta_to_Rotation_T_matrix(self._init_sol_boundaries[3:7])
+        R = self.eta_to_Rotation_T_matrix(self._current_states[3:7])
         self.compute_boundary_Jacobians_pend()
         self._db_pend_dyu_pinv = np.linalg.pinv(self._db_pend_dyu)
-        self._boundary_conditions = self.compute_boundary_conditions_position_boundary(R, self._init_sol_boundaries[7:10], self._init_sol_boundaries[10:13], self._init_sol_boundaries[13:13+self._num_tendons])
-        self._dpose_0_dpose_l = np.linalg.pinv(self._s_forw[0:7, 0:7])
-        A = self._dpose_dq
-        dpdb = self._dpose_dyu@self._db_pend_dyu_pinv
-        B = dpdb@self._db_pend_dq
-        C = dpdb@self._db_pend_dpose
-        D = self._dpose_dpose_0 
-        self._J_q = np.linalg.pinv(C-D)@(A-B)
-        self._B_q = - self._db_pend_dyu_pinv@(self._db_pend_dq + self._db_pend_dpose@self._J_q)
-        self._L_q = self._s_forw[16:19, 13:16] + self._s_forw[16:19, 7:13]@self._B_q + self._s_forw[16:19, 0:7]@self._J_q
+        self._boundary_conditions = self.compute_boundary_conditions_position_boundary(R, self._current_states[7:10], self._current_states[10:13], self._current_states[13:13+self._num_tendons])
+        self._B_q = - self._db_pend_dyu_pinv@self._db_pend_dq
+        self._J_q = (self._dpose_dq + self._dpose_dyu@self._B_q)
+        self._L_q = self._s_forw[16:19, 13:16] + self._s_forw[16:19, 7:13]@self._B_q 
         self._L_q_pinv = np.linalg.pinv(self._L_q)
         self._J_l = self._J_q@self._L_q_pinv
 
@@ -187,10 +181,13 @@ class Quasistatic_Control_Manager:
     
     def solve_differential_inverse_kinematics_position_boundary(self, task_vel): 
 
-        states = np.hstack((self._init_sol_boundaries[0:2], self._current_states[13:16]))
-        task_vel_terminal = np.hstack((task_vel*self._time_step + self._init_sol_boundaries[0:2], np.zeros(3)))
+        """task_vel = angular velocity here, is a 3x1 vector.""" 
+
+        states = np.hstack((self._current_states[3:7], self._current_states[13:16]))
+        eta_dot = np.vstack((np.transpose(-states[1:4][:,None]), np.transpose(states[0]*np.eye(3) + self._skew(states[1:4]))))@task_vel
+        task_vel_terminal = np.hstack((eta_dot*self._time_step + self._current_states[3:7], np.zeros(3)))
         task_vel = np.hstack((task_vel_terminal, np.zeros(3)))
-        self.set_data_diffential_solver(np.reshape(self._J_q[0:2, :], [6, ], order='F'), task_vel, task_vel_terminal, states)
+        self.set_data_diffential_solver(np.reshape(self._J_q[3:7, :], [12, ], order='F'), task_vel, task_vel_terminal, states)
         self._differential_kinematics_solver.solve()
         x = self._differential_kinematics_solver.get(0, 'u')
 
@@ -199,18 +196,14 @@ class Quasistatic_Control_Manager:
 
     def apply_tension_differential_position_boundary(self, delta_q_tau): 
 
-        lyapGain = 1
+
         self.solve_Jacobians_position_boundary()
         boundary_dot = np.array(self._B_q@delta_q_tau*self._time_step)
         pose_dot = np.array(self._J_q@delta_q_tau*self._time_step)
-        self._aug_plus_x0 = -self._db_pend_dyu_pinv@(lyapGain*self._boundary_conditions + self._db_pend_dpose@pose_dot@self._time_step + self._db_pend_dq@delta_q_tau@self._time_step)
-        # self._aug_plus_x0 = 0
         self._current_tau += delta_q_tau*self._time_step
-        self._init_wrench += (boundary_dot[:, 0] + self._aug_plus_x0@self._time_step)
-        # self._init_wrench += boundary_dot[:, 0] 
-        self._init_sol_boundaries[0:7] += pose_dot[:, 0]
-        self._init_sol_boundaries[7:13] = self._init_wrench.full()[:, 0]
-        # self._init_sol_boundaries[7:13] = self._init_wrench
+        self._init_wrench += boundary_dot[:, 0] 
+        # self._init_sol_boundaries[0:7] += pose_dot[:, 0]
+        self._init_sol_boundaries[7:13] = self._init_wrench
         self._init_sol_boundaries[13:13+self._num_tendons] = self._current_tau
         self._lengths_dot = self._L_q@delta_q_tau
         self._t += self._time_step
@@ -304,6 +297,7 @@ class Quasistatic_Control_Manager:
             for i in range(self._MAX_ITERATIONS_STATIC): 
 
                 self._solver_static_position_boundary.solve()
+                print("cost: ", self._solver_static_position_boundary.get_cost())
 
                 if self._solver_static_position_boundary.get_cost() < 1e-8:
 
@@ -322,7 +316,9 @@ class Quasistatic_Control_Manager:
                     self._init_pose_plus_wrench = self._solver_static_position_boundary.get(0, 'x')[0:13]
                     self._init_wrench = self._solver_static_position_boundary.get(0, 'x')[7:13]
                     self._current_tau = self._solver_static_position_boundary.get(0, 'x')[13:13+self._num_tendons]
+                    print(self._init_sol)
                     print(self._integrator_static_full.get('x'))
+                    self.solve_Jacobians_position_boundary()
 
                     break
 
@@ -376,7 +372,7 @@ class Quasistatic_Control_Manager:
         # ax.legend()
         ax.set_xlim(-0.2, 0.2)
         ax.set_ylim(-0.2, 0.2)
-        ax.set_zlim(-0.4, 0)
+        ax.set_zlim(0.4, 0)
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
@@ -416,7 +412,7 @@ class Quasistatic_Control_Manager:
 
         ax.set_xlim(-0.2, 0.2)
         ax.set_ylim(-0.2, 0.2)
-        ax.set_zlim(-0.4, 0.0)
+        ax.set_zlim(0.4, 0.0)
 
         self._data, = ax.plot3D([],[],[])
 
@@ -470,9 +466,8 @@ class Quasistatic_Control_Manager:
 
     def compute_boundary_Jacobians_pend(self): 
 
-        self._db_pend_dyu = self._robot_arm_model.f_db_pend_dy(self._init_sol_boundaries[0:16])[:, 7:13] 
-        self._db_pend_dq = self._robot_arm_model.f_db_pend_dy(self._init_sol_boundaries[0:16])[:, 13:16]
-        self._db_pend_dpose = self._robot_arm_model.f_db_pend_dy(self._init_sol_boundaries[0:16])[:, 0:7]
+        self._db_pend_dyu = (self._robot_arm_model.f_db_pend_dy(self._current_states[0:16])@self._s_forw[0:16, 7:13])
+        self._db_pend_dq = (self._robot_arm_model.f_db_pend_dy(self._current_states[0:16])@self._s_forw[0:16, 13:16])
 
     def DM2Arr(self, dm):
         return np.array(dm.full())

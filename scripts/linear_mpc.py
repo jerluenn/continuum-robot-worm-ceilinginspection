@@ -87,14 +87,15 @@ class Linear_MPC:
         ocp.constraints.lbx_e = np.array([0 for i in range(nx - self._n_states)])
         ocp.constraints.ubx_e = np.array([self._q_max for i in range(nx - self._n_states)])
 
-        ocp.solver_options.levenberg_marquardt = 0.001
+        ocp.solver_options.levenberg_marquardt = 0.01
         # ocp.solver_options.regularize_method = 'CONVEXIFY'
         ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM'  # FULL_CONDENSING_QPOASES
         # ocp.solver_options.qp_solver = 'FULL_CONDENSING_QPOASES'  # FULL_CONDENSING_QPOASES
         ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
         ocp.solver_options.integrator_type = 'ERK'
         ocp.solver_options.nlp_solver_type = 'SQP_RTI'  # SQP_RTI
-        ocp.solver_options.nlp_solver_max_iter = 400
+        ocp.solver_options.qp_solver_iter_max = 200
+        ocp.solver_options.nlp_solver_max_iter = 10
         ocp.parameter_values = np.zeros(self._n_states*self._n_tendons)
         # ocp.solver_options.qp_solver_cond_N = self._N
 

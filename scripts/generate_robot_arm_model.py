@@ -35,7 +35,8 @@ class Robot_Arm_Model:
         self._Bse = self._robot_arm_params_obj.get_Bse()
         self._initialise_states()
         self._create_static_integrator()
-        self._create_dynamic_integrator()
+        # self._create_dynamic_integrator()
+        self._create_static_full_robot_integrator()
 
     def _initialise_states(self):
 
@@ -46,6 +47,7 @@ class Robot_Arm_Model:
         self._n = SX.sym('n', 3)
         self._m = SX.sym('m', 3)
         self._tau = SX.sym('tau', 3)
+        self._tau1 = SX.sym('tau1', 3)
         self._q = SX.sym('q', 3)
         self._om = SX.sym('om', 3)
         self._b = SX.sym('b', 6)
@@ -56,6 +58,7 @@ class Robot_Arm_Model:
         self._n_d = SX.sym('n_dot', 3)
         self._m_d = SX.sym('m_dot', 3)
         self._tau_d = SX.sym('tau_dot', 3)
+        self._tau1_d = SX.sym('tau1_dot', 3)
         self._q_d = SX.sym('q_dot', 3)
         self._om_d = SX.sym('om_dot', 3)
         self._alpha_d = SX.sym('alpha_dot', 1)
@@ -120,7 +123,7 @@ class Robot_Arm_Model:
         self._v_dyn = inv(self._robot_arm_params_obj.get_Kse() + self._c0*self._robot_arm_params_obj.get_Bse())@(transpose(reshape(self._R, 3, 3))@self._n + self._robot_arm_params_obj.get_Kse()@SX([0, 0, 1]) - self._robot_arm_params_obj.get_Bse()@self._v_history)
         # self._u_dyn = inv(self._Kbt)@transpose(reshape(self._R, 3, 3))@self._m
         # self._v_dyn = inv(self._Kse)@transpose(reshape(self._R, 3, 3))@self._n + SX([0, 0, 1])
-        self._k = 0.1
+        self._k = 0.01
 
         self._v_t = self._c0*self._v_dyn + self._v_history
         self._u_t = self._c0*self._u_dyn + self._u_history
@@ -146,8 +149,8 @@ class Robot_Arm_Model:
             0.5*(self._u[1]*self._eta[0] - self._u[2]*self._eta[1] + self._u[0]*self._eta[3]),
             0.5*(self._u[2]*self._eta[0] + self._u[1]*self._eta[1] - self._u[0]*self._eta[2])
         ) + c * self._eta 
-        n_dot = - (self._f_ext) - self.get_external_distributed_forces()
-        # n_dot = - (self._f_ext) - self.get_external_distributed_forces_opposite_direction()
+        # n_dot = - (self._f_ext) - self.get_external_distributed_forces()
+        n_dot = - (self._f_ext) - self.get_external_distributed_forces_opposite_direction()
         m_dot = - cross(p_dot, self._n) 
         tau_dot = SX.zeros(self._tau.shape[0])
 
@@ -262,8 +265,8 @@ class Robot_Arm_Model:
             0.5*(self._u[1]*self._eta[0] - self._u[2]*self._eta[1] + self._u[0]*self._eta[3]),
             0.5*(self._u[2]*self._eta[0] + self._u[1]*self._eta[1] - self._u[0]*self._eta[2])
         ) + c * self._eta 
-        n_dot = - (self._f_ext) - self.get_external_distributed_forces()
-        # n_dot = - (self._f_ext) - self.get_external_distributed_forces_opposite_direction()
+        # n_dot = - (self._f_ext) - self.get_external_distributed_forces()
+        n_dot = - (self._f_ext) - self.get_external_distributed_forces_opposite_direction()
         m_dot = - cross(p_dot, self._n) 
         tau_dot = SX.zeros(self._tau.shape[0])
 
@@ -310,7 +313,97 @@ class Robot_Arm_Model:
 
         return acados_integrator
 
-        
+    def _create_static_full_robot_integrator(self): 
+
+            """TO DO!"""
+
+            model_name = self._dir_name + 'static_full_robot' + self._id 
+
+            c = self._k*(1-transpose(self._eta)@self._eta)
+
+            s = SX.sym('s', 1)
+
+            steepness = 1000
+            shift1 = 150
+
+            sigmoid1 = 1 - (1/(1 + exp(-steepness*s + shift1)))
+            sigmoid2 = (1/(1 + exp(-steepness*s + shift1)))
+            # sigmoid1 = 1
+            # sigmoid2 = 1
+
+            u = SX.sym('u')
+
+            p_dot = reshape(self._R, 3, 3) @ self._v
+            eta_dot = vertcat(
+                0.5*(-self._u[0]*self._eta[1] - self._u[1]*self._eta[2] - self._u[2]*self._eta[3]),
+                0.5*(self._u[0]*self._eta[0] + self._u[2]*self._eta[2] - self._u[1]*self._eta[3]),
+                0.5*(self._u[1]*self._eta[0] - self._u[2]*self._eta[1] + self._u[0]*self._eta[3]),
+                0.5*(self._u[2]*self._eta[0] + self._u[1]*self._eta[1] - self._u[0]*self._eta[2])
+            ) + c * self._eta 
+            # n_dot = - (self._f_ext) - self.get_external_distributed_forces()
+            n_dot = - (self._f_ext) - self.get_external_distributed_forces_opposite_direction()*sigmoid1 - self.get_external_distributed_forces_second_arm()*sigmoid2
+            m_dot = - cross(p_dot, self._n) 
+            tau_dot = SX.zeros(6)
+            s_dot = 1
+
+            b_pendulum = self.get_point_force_position_boundary() - vertcat(self._n, self._m)
+            b = self.get_tendon_point_force() - vertcat(self._n, self._m)
+            # b = self.get_tendon_point_force_opposite_direction() - vertcat(self._n, self._m)
+            lengths_dot = SX([])
+
+            # self.db_pend_dy = jacobian(b_pendulum, vertcat(self._p, self._eta, self._n, self._m, self._tau))
+            # self.f_db_pend_dy = Function('f', [vertcat(self._p, self._eta, self._n, self._m, self._tau)], [self.db_pend_dy])
+
+            # self.db_dy = jacobian(b, vertcat(self._eta, self._n, self._m, self._tau))
+            # self.f_db_dy = Function('f', [vertcat(self._eta, self._n, self._m, self._tau)], [self.db_dy])
+
+            for i in range(self._tau.size()[0]):
+
+                # Currently accounts only for parallel tendons.
+                lengths_dot = vertcat(lengths_dot, norm_2(
+                    p_dot + self._R@skew(self._u)@transpose(self._tendon_radiuses[i, :])))
+
+
+            x = vertcat(self._p, self._eta, self._n, self._m, self._tau, self._tau1, s)
+            xdot = vertcat(p_dot, eta_dot,
+                        n_dot, m_dot, tau_dot, s_dot)
+
+            self._static_model_full_robot = AcadosModel()
+            self._static_model_full_robot.name = model_name
+            self._static_model_full_robot.x = x 
+            self._static_model_full_robot.f_expl_expr = xdot 
+            self._static_model_full_robot.u = u
+            self._static_model_full_robot.z = SX([])
+
+            sim = AcadosSim()
+            sim.model = self._static_model_full_robot 
+
+            Sf = self._boundary_length*2
+
+            sim.code_export_directory = model_name
+            sim.solver_options.T = Sf
+            sim.solver_options.integrator_type = 'ERK'
+            sim.solver_options.num_stages = self._integration_stages
+            sim.solver_options.num_steps = self._integration_steps*2
+
+            acados_integrator = AcadosSimSolver(sim)
+
+            return acados_integrator
+
+    def get_external_distributed_forces_second_arm(self): 
+
+        p_dot = reshape(self._R, 3, 3) @ self._v
+
+        p_dotdot = reshape(self._R, 3, 3) @ skew(self._u) @ self._v
+
+        f_t = SX.zeros(3)
+
+        for i in range(self._tau.shape[0]):
+
+            f_t -= (self._tau1[i]) * (skew(p_dot)@skew(p_dot))@p_dotdot / (norm_2(p_dot)**3)
+
+        return f_t 
+
 
     def get_external_distributed_forces(self):
 
@@ -332,15 +425,15 @@ class Robot_Arm_Model:
 
         """TO DO: Documentation"""
 
-        p_dot = reshape(self._R, 3, 3) @ self._v
+        p_dot = - reshape(self._R, 3, 3) @ self._v
 
-        p_dotdot = reshape(self._R, 3, 3) @ skew(self._u) @ self._v
+        p_dotdot = - reshape(self._R, 3, 3) @ skew(self._u) @ self._v
 
         f_t = SX.zeros(3)
 
         for i in range(self._tau.shape[0]):
 
-            f_t += (self._tau[i]) * (skew(p_dot)@skew(p_dot))@p_dotdot / (norm_2(p_dot)**3)
+            f_t -= (self._tau[i]) * (skew(p_dot)@skew(p_dot))@p_dotdot / (norm_2(p_dot)**3)
 
         return f_t 
 
@@ -363,13 +456,31 @@ class Robot_Arm_Model:
 
         W_t = SX.zeros(6)
 
-        p_dot = reshape(self._R, 3, 3) @ self._v
+        # p_dot = reshape(self._R, 3, 3) @ np.linalg.inv(np.array([[-1, 0, 0],[0, 1, 0],[0, 0, -1]])) @ self._v
+        p_dot = -reshape(self._R, 3, 3) @ self._v
 
         for i in range(self._tau.shape[0]): 
 
-            W_t += vertcat(-self._tau[i]*(p_dot/norm_2(p_dot)), -self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
+            W_t -= vertcat(self._tau[i]*(p_dot/norm_2(p_dot)), -self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
 
-        W_t -= vertcat(self._mass_body*self._g, 0, 0, 0)
+        W_t += vertcat(self._mass_body*self._g, 0, 0, 0)
+
+        return W_t
+
+    def get_point_force_first_arm(self):
+
+        W_t = SX.zeros(6)
+
+        # p_dot = reshape(self._R, 3, 3) @ np.linalg.inv(np.array([[-1, 0, 0],[0, 1, 0],[0, 0, -1]])) @ self._v
+        p_dot = -reshape(self._R, 3, 3) @ self._v
+        p_dot1 = reshape(self._R, 3, 3) @ self._v
+
+        for i in range(self._tau.shape[0]): 
+
+            W_t -= vertcat(self._tau[i]*(p_dot/norm_2(p_dot)), -self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
+            W_t -= vertcat(self._tau1[i]*(p_dot1/norm_2(p_dot1)), self._tau1[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot1/norm_2(p_dot1)))
+
+        W_t += vertcat(self._mass_body*self._g, 0, 0, 0)
 
         return W_t
 
@@ -402,6 +513,9 @@ class Robot_Arm_Model:
         return f_t 
 
 
+    def get_static_full_robot_arm_model(self): 
+
+        return self._static_model_full_robot
     def get_robot_arm_params(self): 
 
         return self._robot_arm_params_obj
