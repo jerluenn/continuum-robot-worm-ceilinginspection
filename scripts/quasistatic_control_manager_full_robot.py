@@ -23,11 +23,10 @@ class Quasistatic_Control_Manager_Full_Robot:
         self._robot_arm_model = robot_arm_model
         self._robot1 = Multiple_Shooting_Solver(robot_arm_model)
         self._num_tendons = self._robot_arm_model._tau.shape[0]
-        self._integrator_with_boundaries_0 = self._robot_arm_model._create_static_integrator_with_boundaries()
-        self._integrator_with_boundaries_1 = self._robot_arm_model._create_static_integrator_with_boundaries()
-
-        self._integrator_static_full = self._robot_arm_model._create_static_integrator()
-        self._solver_static_full_robot, self._integrator_static_full_robot_step = self._robot1.create_static_solver_full_robot()
+        self._integrator_with_boundaries = self._robot_arm_model._create_static_integrator_with_boundaries()
+        self._integrator_static = self._robot_arm_model._create_static_integrator()
+        self._solver_static_robot, self._integrator_static_step = self._robot1.create_static_solver()
+        self._solver_static_robot_position_boundary, self._integrator_static_position_boundary_step = self._robot1.create_static_solver_position_boundary()
         self._wrench_lb = -50
         self._wrench_ub = 50
         self._tendon_radiuses = self._robot_arm_model._tendon_radiuses_numpy
@@ -41,18 +40,19 @@ class Quasistatic_Control_Manager_Full_Robot:
         self._current_states = np.zeros((20, 1))
         self._boundary_Jacobian = np.zeros((6, 9))
         self._init_wrench = np.zeros(6)
-        self._current_full_states = np.zeros((14+self._num_tendons*2, self._robot_arm_model.get_num_integration_steps()*2+1))
-        self._current_full_states[3, :] = 1
+        self._current_full_states_0 = np.zeros((13+self._num_tendons*2, self._robot_arm_model.get_num_integration_steps()+1))
+        self._current_full_states_1 = np.zeros((13+self._num_tendons*2, self._robot_arm_model.get_num_integration_steps()+1))
+        self._current_full_states_0[3, :] = 1
         self._time_step = 1e-2
         self._t = 0.0
-        self._history_states = np.zeros((14+self._num_tendons*2, self._robot_arm_model.get_num_integration_steps()+1, 10000))
+        self._current_tau = np.zeros(6)
+        self._history_states = np.zeros((13+self._num_tendons*2, self._robot_arm_model.get_num_integration_steps()+1, 10000))
         self.wrench_lb = -50
         self.wrench_ub = 50
         self.pos_ub = 5
         self.eta_ub = 1.05
         self.tension_max = 50
         self._differential_kinematics_solver = solver
-        self.tension_values = np.zeros(6)
 
     def set_time_step(self, time_step): 
         
@@ -104,15 +104,69 @@ class Quasistatic_Control_Manager_Full_Robot:
 
     def solve_Jacobians(self): 
 
-        pass 
+        # Integrate first
+
+        self._integrator_with_boundaries.set('x', self._init_states_0)
+        self._integrator_with_boundaries.solve()
+        
+        self._current_states_0 = self._integrator_with_boundaries.get('x')
+
+        wrench_at_body = -self._robot_arm_model._f_b_pend(self._current_states_0[3:16])
+
+        self._init_states_1 = np.hstack((self._current_states_0[0:7],
+                                         np.array(wrench_at_body)[:,0],
+                                         self._current_tau[3:6],
+                                         np.zeros(3)))
+        
+        self._integrator_static.set('x', self._init_states_1)
+        self._integrator_static.solve()
+
+        self._s_forw_0 = self._integrator_with_boundaries.get('S_forw')
+        self._s_forw_1 = self._integrator_static.get('S_forw')
+
+        self._current_states_1 = self._integrator_static.get('x')
+
+        self._dpose_dyu_0 = self._s_forw_0[0:7, 7:13]
+        self._dpose_dq_0 = np.hstack((self._s_forw_0[0:7, 13:16], np.zeros((7, 3))))
+
+        self._dpose_dyu_1 = self._s_forw_1[0:7, 7:13]
+        self._dpose_dq_1 = np.hstack((np.zeros((7, 3)), self._s_forw_1[0:7, 13:16]))
+
+        self.compute_boundary_Jacobian()
+
+        print("Boundary for arm 1: ", self._robot_arm_model._f_b_pend(self._current_states_0[3:16]))
+        print("Boundary for arm 2: ", self._robot_arm_model._f_b(self._current_states_1[3:16]))
+
+        self._db_dyu_pinv_0 = np.linalg.pinv(self._db_dyu_0)      
+        self._db_dyu_pinv_1 = np.linalg.pinv(self._db_dyu_1)
+
+        self._B_q_1 = -self._db_dyu_pinv_1@self._db_dq_1
+        self._B_q_0 = -self._db_dyu_pinv_0@(self._db_dyu_0 - self._db_dyu_pinv_1@self._db_dq_1)
+        # self._J_q_0 = self._dpose_dq_0 + self._dpose_dyu_0@self._B_q_0 + np.linalg.inv(self._s_forw_1[0:7, 0:7])@self._dpose_dyu_1@self._db_dyu_pinv_1@self._db_dq_1
+        self._J_q_0 = self._dpose_dq_0 + self._dpose_dyu_0@self._B_q_0
+        self._J_q_1 = self._dpose_dq_1 + self._dpose_dyu_1@self._B_q_1 + self._s_forw_1[0:7, 0:7]@self._J_q_0
+
+        # Set lengths!
 
     def solve_differential_inverse_kinematics(self, task_vel): 
 
         pass 
 
-    def apply_tension_differential_position_boundary(self, delta_q_tau): 
+    def apply_tension_differential(self, delta_q_tau): 
 
-        pass 
+        self.solve_Jacobians()
+        boundary_dot_0 = np.array(self._B_q_0@delta_q_tau*self._time_step)[:, 0]
+        boundary_dot_1 = self._B_q_1@delta_q_tau*self._time_step
+        pose_dot_1 = np.array(self._J_q_1@delta_q_tau*self._time_step)[:, 0]
+        self._current_tau += delta_q_tau*self._time_step
+        self._init_wrench += boundary_dot_0
+        self._init_wrench_1 += boundary_dot_1
+        self._init_states_1[0:7] += pose_dot_1
+        self._init_states_0[7:13] = self._init_wrench
+        self._init_states_1[7:13] = self._init_wrench_1
+        self._init_states_0[13:16] = self._current_tau[0:3]
+        self._init_states_1[13:16] = self._current_tau[3:6]
+        self._t += self._time_step
 
     def print_Jacobians(self): 
 
@@ -124,54 +178,85 @@ class Quasistatic_Control_Manager_Full_Robot:
 
     def solve_full_shape(self): 
 
-        pass 
+        self._current_full_states_0[7:13, 0] = self._init_wrench
+        self._current_full_states_0[13: 13+self._num_tendons, 0] = self._current_tau[0:3]
 
-    def solve_static(self): 
+        for i in range(self._robot_arm_model.get_num_integration_steps()):
+
+            x = self._current_full_states_0[:, i]
+            self._integrator_static_position_boundary_step.set('x', x)
+            self._integrator_static_position_boundary_step.solve()
+            self._current_full_states_0[:, i+1] = self._integrator_static_position_boundary_step.get('x')
+
+        self._current_full_states_1[0:7, 0] = x[0:7] 
+        self._current_full_states_1[7:13, 0] = np.array(-self._robot_arm_model._f_b_pend(x[3:16]))[:, 0]
+        self._current_full_states_1[13: 13+self._num_tendons, 0] = self._current_tau[3:6]
+
+        for i in range(self._robot_arm_model.get_num_integration_steps()):
+
+            x = self._current_full_states_1[:, i]
+            self._integrator_static_step.set('x', x)
+            self._integrator_static_step.solve()
+            self._current_full_states_1[:, i+1] = self._integrator_static_step.get('x')
+
+        self._init_states_0 = self._current_full_states_0[:, 0]
+        self._init_states_1 = self._current_full_states_1[:, 0]
+        self._init_wrench_1 = self._current_full_states_1[7:13, 0]
+
+    def solve_static(self, init_solution=np.zeros(6)): 
 
         t = time.time()
 
-        if self.INITIALISED_STATIC_SOLVER:  
+        sol = least_squares(self.residuals_func, init_solution, method='lm')
+        self._init_wrench = sol.x
+        print("Initial wrench: ", sol.x)
+        print("Cost: ", sol.cost)
 
-            for i in range(self._MAX_ITERATIONS_STATIC): 
+        return sol
 
-                self._solver_static_full_robot.solve()
-                print("cost: ", self._solver_static_full_robot.get_cost())
+    def set_tensions_SS_solver(self, tensions): 
 
-                if self._solver_static_full_robot.get_cost() < 1e-5:
+        self._current_tau = tensions
 
-                    print("Number of iterations required: ", i+1)
-                    print("Total time taken: ", (time.time() - t), 's')
-                    print("Time taken per iteration: ", (time.time() - t)/(i+1), "s.")
-                    self._init_sol = self._solver_static_full_robot.get(0, 'x')
+    def residuals_func(self, guess): 
 
-                    for k in range(self._robot_arm_model.get_num_integration_steps()*2+1):
+        states_0 = np.hstack((np.zeros(3),
+                            np.array([1, 0, 0, 0]),
+                            guess,
+                            self._current_tau[0:3],
+                            np.zeros(3)))
 
-                        self._current_full_states[:, k] = self._solver_static_full_robot.get(k, 'x')
-                                        
-                    self._init_sol_boundaries = np.hstack((self._init_sol, 0*np.ones(3)))
-                    # self._integrator_static_full.set('x', self._init_sol)
-                    # self._integrator_static_full.solve()
-                    # self._init_pose_plus_wrench = self._solver_static_full_robot.get(0, 'x')[0:13]
-                    # self._init_wrench = self._solver_static_full_robot.get(0, 'x')[7:13]
-                    # self._current_tau = self._solver_static_full_robot.get(0, 'x')[13:13+self._num_tendons]
-                    # print(self._init_sol)
-                    # print(self._integrator_static_full.get('x'))
+        self._integrator_with_boundaries.set('x', states_0)
+        self._integrator_with_boundaries.solve()
+        states_0 = self._integrator_with_boundaries.get('x')
 
-                    break
+        # Do something with states here. 
 
-                elif i == self._MAX_ITERATIONS_STATIC - 1 and self._solver_static_full_robot.get_cost() > 1e-5: 
+        wrench_at_body = -self._robot_arm_model._f_b_pend(states_0[3:16])
 
-                    print("DID NOT CONVERGE!")
-        
-        
+        states_b = np.hstack((states_0[0:7], 
+                              np.array(wrench_at_body)[:,0],
+                              self._current_tau[3:6],
+                              np.zeros(3)))
+
+        self._integrator_static.set('x', states_b)
+        self._integrator_static.solve()
+        sol = self._integrator_static.get('x')
+        # print('sol: ', sol)
+
+        residuals = self._robot_arm_model._f_b(sol[3:16])
+        residuals = np.array(residuals.full())[:, 0]
+
+        return residuals 
+
 
     def visualise_robot(self): 
 
         self.solve_full_shape()
 
         ax = plt.figure().add_subplot(projection='3d')
-        ax.plot(self._current_full_states[0, 0:self._robot_arm_model.get_num_integration_steps()], self._current_full_states[1, 0:self._robot_arm_model.get_num_integration_steps()], self._current_full_states[2, 0:self._robot_arm_model.get_num_integration_steps()])
-        ax.plot(self._current_full_states[0, self._robot_arm_model.get_num_integration_steps(): 2*self._robot_arm_model.get_num_integration_steps()], self._current_full_states[1, self._robot_arm_model.get_num_integration_steps(): 2*self._robot_arm_model.get_num_integration_steps()], self._current_full_states[2, self._robot_arm_model.get_num_integration_steps(): 2*self._robot_arm_model.get_num_integration_steps()])
+        ax.plot(self._current_full_states_0[0, :], self._current_full_states_0[1, :], self._current_full_states_0[2, :])
+        ax.plot(self._current_full_states_1[0, :], self._current_full_states_1[1, :], self._current_full_states_1[2, :])
 
         # ax.legend()
         ax.set_xlim(-0.2, 0.2)
@@ -209,3 +294,11 @@ class Quasistatic_Control_Manager_Full_Robot:
                         [x[2], 0, -x[0]],
                         [-x[1], x[0], 0]])
 
+
+    def compute_boundary_Jacobian(self):
+
+        self._db_dyu_1 = self._robot_arm_model.f_db_dy(self._current_states_1[3:16])@self._s_forw_1[3:16, 7:13]
+        self._db_dq_1 = np.hstack((np.zeros((6, 3)), self._robot_arm_model.f_db_dy(self._current_states_1[3:16])@self._s_forw_1[3:16, 13:16]))
+
+        self._db_dyu_0 = (self._robot_arm_model.f_db_pend_dy(self._current_states_0[0:16])@self._s_forw_0[0:16, 7:13])
+        self._db_dq_0 = np.hstack(((self._robot_arm_model.f_db_pend_dy(self._current_states_0[0:16])@self._s_forw_0[0:16, 13:16]), np.zeros((6, 3))))
