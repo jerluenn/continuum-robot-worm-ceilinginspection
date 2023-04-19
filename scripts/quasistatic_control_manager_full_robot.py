@@ -123,6 +123,7 @@ class Quasistatic_Control_Manager_Full_Robot:
 
         self._s_forw_0 = self._integrator_with_boundaries.get('S_forw')
         self._s_forw_1 = self._integrator_static.get('S_forw')
+        # self._s_forw_1 = self._integrator_with_boundaries.get('S_forw')
 
         self._current_states_1 = self._integrator_static.get('x')
 
@@ -140,13 +141,44 @@ class Quasistatic_Control_Manager_Full_Robot:
         self._db_dyu_pinv_0 = np.linalg.pinv(self._db_dyu_0)      
         self._db_dyu_pinv_1 = np.linalg.pinv(self._db_dyu_1)
 
-        self._B_q_1 = -self._db_dyu_pinv_1@self._db_dq_1
-        self._B_q_0 = -self._db_dyu_pinv_0@(self._db_dyu_0 - self._db_dyu_pinv_1@self._db_dq_1)
+        # A = (self._db_dyu_1 + self._db_dpose_1@(-self._dpose_dyu_0@self._db_dyu_pinv_0@np.identity(6)))
+        # B = self._db_dq_1 + self._db_dpose_1@(self._dpose_dq_0 - self._dpose_dyu_0@self._db_dyu_pinv_0@self._db_dq_0)
+
+        # A = self._db_dyu_1@self._db_dyu_0
+        # B = self._db_dq_1 + self._db_dyu_1@self._db_dq_0
+
+        A = self._db_dyu_1@self._db_dyu_0 + self._db_dpose_0@self._dpose_dyu_0
+        B = self._db_dq_1 + self._db_dyu_1@self._db_dq_0 + self._db_dpose_0@self._dpose_dq_0
+        
+        # test = self._robot_arm_model.f_db_pend_dy(self._current_states_0[0:16])[:, 0:7]
+
+        # dpose_0_dw_1 = np.linalg.pinv(test)
+        # dpose_0_dw_1 = self._dpose_dyu_0@self._db_dyu_pinv_0
+        # db_1_dpose0 = self._db_dyu_1@self._s_forw_1[0:7, 0:7]
+
+        # A = self._db_dyu_1@self._db_dyu_0 + self._db_dpose_0@self._dpose_dyu_0 + self._db_dpose_0@dpose_0_dw_1@self._db_dyu_1
+        # B = self._db_dq_1 + self._db_dyu_1@self._db_dq_0 + self._db_dpose_0@self._dpose_dq_0 + self._db_dpose_0@dpose_0_dw_1@self._db_dq_0
+
+        # self._B_q_1 = -np.linalg.pinv(A)@B 
+        # self._B_q_0 = -self._db_dyu_pinv_0@(self._db_dq_0 + self._B_q_1)
+        self._B_q_0 = -np.linalg.pinv(A)@B
+        self._B_q_1 = self._db_dyu_0@self._B_q_0 + self._db_dq_0
         # self._J_q_0 = self._dpose_dq_0 + self._dpose_dyu_0@self._B_q_0 + np.linalg.inv(self._s_forw_1[0:7, 0:7])@self._dpose_dyu_1@self._db_dyu_pinv_1@self._db_dq_1
         self._J_q_0 = self._dpose_dq_0 + self._dpose_dyu_0@self._B_q_0
         self._J_q_1 = self._dpose_dq_1 + self._dpose_dyu_1@self._B_q_1 + self._s_forw_1[0:7, 0:7]@self._J_q_0
-
+        # self._J_q_1 = self._dpose_dq_1 + self._dpose_dyu_1@self._B_q_1
         # Set lengths!
+
+        self._L_q = np.hstack((np.vstack((self._s_forw_0[16:19, 13:16], np.zeros((3,3)))), np.vstack((np.zeros((3,3)), self._s_forw_1[16:19, 13:16])))) + np.vstack((self._s_forw_0[16:19, 7:13], self._s_forw_1[16:19, 7:13]))@self._B_q_0
+
+        self._L_q_0 = self._s_forw_0[16:19, 13:16] + self._s_forw_0[16:19, 7:13]@self._B_q_0 
+        self._L_q_1 = self._s_forw_1[16:19, 13:16] + self._s_forw_1[16:19, 7:13]@self._B_q_1
+
+        self._L_q_pinv_0 = np.linalg.pinv(self._L_q_0)
+        self._L_q_pinv_1 = np.linalg.pinv(self._L_q_1)
+
+        self._J_l_0 = self._J_q_0@self._L_q_pinv_0
+        self._J_l_1 = self._J_q_1@self._L_q_pinv_1
 
     def solve_differential_inverse_kinematics(self, task_vel): 
 
@@ -155,15 +187,16 @@ class Quasistatic_Control_Manager_Full_Robot:
     def apply_tension_differential(self, delta_q_tau): 
 
         self.solve_Jacobians()
-        boundary_dot_0 = np.array(self._B_q_0@delta_q_tau*self._time_step)[:, 0]
+        boundary_dot_0 = np.array(self._B_q_0@delta_q_tau*self._time_step)
+        # boundary_dot_0 = np.transpose(np.array(self._B_q_0@delta_q_tau*self._time_step))
         boundary_dot_1 = self._B_q_1@delta_q_tau*self._time_step
-        pose_dot_1 = np.array(self._J_q_1@delta_q_tau*self._time_step)[:, 0]
+        pose_dot_1 = np.array(self._J_q_0@delta_q_tau*self._time_step)
         self._current_tau += delta_q_tau*self._time_step
-        self._init_wrench += boundary_dot_0
+        self._init_wrench += boundary_dot_0[:, 0]
         self._init_wrench_1 += boundary_dot_1
-        self._init_states_1[0:7] += pose_dot_1
+        self._init_states_1[0:7] += pose_dot_1[:, 0]
         self._init_states_0[7:13] = self._init_wrench
-        self._init_states_1[7:13] = self._init_wrench_1
+        self._init_states_1[7:13] = np.array(self._init_wrench_1)[:, 0]
         self._init_states_0[13:16] = self._current_tau[0:3]
         self._init_states_1[13:16] = self._current_tau[3:6]
         self._t += self._time_step
@@ -300,5 +333,13 @@ class Quasistatic_Control_Manager_Full_Robot:
         self._db_dyu_1 = self._robot_arm_model.f_db_dy(self._current_states_1[3:16])@self._s_forw_1[3:16, 7:13]
         self._db_dq_1 = np.hstack((np.zeros((6, 3)), self._robot_arm_model.f_db_dy(self._current_states_1[3:16])@self._s_forw_1[3:16, 13:16]))
 
-        self._db_dyu_0 = (self._robot_arm_model.f_db_pend_dy(self._current_states_0[0:16])@self._s_forw_0[0:16, 7:13])
-        self._db_dq_0 = np.hstack(((self._robot_arm_model.f_db_pend_dy(self._current_states_0[0:16])@self._s_forw_0[0:16, 13:16]), np.zeros((6, 3))))
+        self._db_dyu_0 = -(self._robot_arm_model.f_db_pend_dy(self._current_states_0[0:16])@self._s_forw_0[0:16, 7:13])
+        self._db_dq_0 = -np.hstack(((self._robot_arm_model.f_db_pend_dy(self._current_states_0[0:16])@self._s_forw_0[0:16, 13:16]), np.zeros((6, 3))))
+
+        self._db_dpose_0 = self._robot_arm_model.f_db_dy(self._current_states_1[3:16])@self._s_forw_1[3:16, 0:7]
+        # self._db_dpose_0 = self._robot_arm_model.f_db_pend_dy(self._current_states_0[0:16])[:, 0:7]@self._s_forw_1[0:7, 0:7]
+        self._db_dpose_1 = np.hstack((np.zeros((6, 3)), self._robot_arm_model.f_db_dy(self._current_states_1[3:16])[:, 0:4]))
+
+        # this one is db1_drho0(l)
+
+        # self._db_dpose_1 = np.hstack((np.zeros((6, 3)), self._robot_arm_model.f_db_dy(self._current_states_1[3:16])[:, 0:4]))@self._s_forw_1[0:7, 0:7]

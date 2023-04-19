@@ -17,8 +17,8 @@ from mpl_toolkits.mplot3d import Axes3D
 
 tendon_radiuses_list = [[0.0175*1.4, 0, 0], [-0.00875*1.4, 0.0151554*1.4, 0], [-0.00875*1.4, -0.0151554*1.4, 0]]
 tendon_radiuses = SX(tendon_radiuses_list)
-robot_arm_1 = Robot_Arm_Params(0.15, 0.05, -0.5, "1", 0.3)
-robot_arm_1.from_solid_rod(0.0005, 60e9, 200e9, 8000)
+robot_arm_1 = Robot_Arm_Params(0.15, 0.05, -0.5, "1", 0.6)
+robot_arm_1.from_solid_rod(0.0005, 100e9, 200e9, 8000)
 robot_arm_1.set_gravity_vector('z')
 C = np.diag([0.000, 0.000, 0.000])
 Bbt = np.diag([1e-4, 1e-4, 1e-4])
@@ -45,17 +45,18 @@ diff_inv_solver, _ = diff_inv.create_inverse_differential_kinematics()
 
 quasi_sim_manager = Quasistatic_Control_Manager_Full_Robot(robot_arm_model_1, diff_inv_solver)
 
-tension = np.array([1.0, 0.0, 0, 0, 0, 0])
+tension = np.array([0.0, 0.0, 0, 0, 0, 0])
 initial_guess = np.zeros(6)
+# quasi_sim_manager.set_time_step(0.001)
 quasi_sim_manager.set_tensions_SS_solver(tension)
 quasi_sim_manager.solve_static(initial_guess)
 quasi_sim_manager.visualise_robot()
 
-iterations = 100
+iterations = 2000
 
 for i in range(iterations): 
 
-    quasi_sim_manager.apply_tension_differential(np.array([1, 0, 0, 0, 0, 0]))
+    quasi_sim_manager.apply_tension_differential(np.array([0.0, 0.0, 0.0, 0.4, 0.0, 0.0]))
     
 quasi_sim_manager.visualise_robot()
 print("Robot states at 0: ", quasi_sim_manager._current_states_0)

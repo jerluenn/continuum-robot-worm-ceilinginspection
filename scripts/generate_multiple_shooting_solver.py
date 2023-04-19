@@ -103,7 +103,8 @@ class Multiple_Shooting_Solver:
     def create_static_solver_position_boundary(self): 
 
         self.ocp = AcadosOcp()
-        self.ocp.model = self._robot_arm_model.get_static_robot_arm_model()
+        # self.ocp.model = self._robot_arm_model.get_static_robot_arm_model()
+        self.ocp.model = self._robot_arm_model.get_static_robot_arm_model_with_boundaries_model()
         self.nx = self.ocp.model.x.size()[0]
         self.ocp.model.name = 'static_solver_position_boundary'
         nu = self.ocp.model.u.size()[0]
