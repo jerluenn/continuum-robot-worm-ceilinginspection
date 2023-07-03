@@ -48,7 +48,7 @@ diff_inv_solver, _ = diff_inv.create_inverse_differential_kinematics()
 initial_solution = np.zeros(19)
 initial_solution[3] = 1
 
-init_sol = np.zeros(16)
+init_sol = np.zeros(19)
 init_sol[3] = 1
 init_sol[2] = -0.15
 init_sol[9] = -0
@@ -65,7 +65,7 @@ quasi_sim_manager = Quasistatic_Control_Manager(robot_arm_model_1, diff_inv_solv
 quasi_sim_manager.initialise_static_solver_position_boundary(init_sol)
 quasi_sim_manager.set_tensions_static_MS_solver_position_boundary([0.0, 0.0, 0])
 quasi_sim_manager.solve_static_position_boundary()
-# quasi_sim_manager.visualise_pb_arm()
+# 
 
 t0 = time.time()
 
@@ -80,17 +80,17 @@ for i in range(N):
     # tension_input = quasi_sim_manager.solve_differential_inverse_kinematics(np.array([-0.05, 0.1]))
     # quasi_sim_manager.apply_tension_differential(np.array(tension_input))
     quasi_sim_manager.apply_tension_differential_position_boundary(np.array([1.5, 0, 0]))
-    quasi_sim_manager.print_Jacobians_position_boundary()
-    quasi_sim_manager.save_step()
+    # quasi_sim_manager.print_Jacobians_position_boundary()
+    # quasi_sim_manager.save_step()
 
 
 # print(quasi_sim_manager.get_simulation_data()[1][0:3, -1])    
 # print(quasi_sim_manager.get_simulation_data()[1][13:, -1])
 # print("----------------------------------------")
-# print(f"Time taken: {(time.time() - t0)/N}")
+print(f"Time taken: {(time.time() - t0)/N}")
 
-quasi_sim_manager.print_Jacobians()
-# quasi_sim_manager.visualise()
+# quasi_sim_manager.print_Jacobians()
+quasi_sim_manager.visualise_pb_arm()
 
 # quasi_sim_manager.animate('test')
 

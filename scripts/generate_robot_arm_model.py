@@ -288,8 +288,8 @@ class Robot_Arm_Model:
             0.5*(self._u[1]*self._eta[0] - self._u[2]*self._eta[1] + self._u[0]*self._eta[3]),
             0.5*(self._u[2]*self._eta[0] + self._u[1]*self._eta[1] - self._u[0]*self._eta[2])
         ) + c * self._eta 
-        # n_dot = - (self._f_ext) - self.get_external_distributed_forces()
-        n_dot = - (self._f_ext) - self.get_external_distributed_forces_opposite_direction()
+        n_dot = - (self._f_ext) - self.get_external_distributed_forces()
+        # n_dot = - (self._f_ext) - self.get_external_distributed_forces_opposite_direction()
         m_dot = - cross(p_dot, self._n) 
         tau_dot = SX.zeros(self._tau.shape[0])
 
@@ -413,15 +413,34 @@ class Robot_Arm_Model:
         W_t = SX.zeros(6)
 
         # p_dot = reshape(self._R, 3, 3) @ np.linalg.inv(np.array([[-1, 0, 0],[0, 1, 0],[0, 0, -1]])) @ self._v
-        p_dot = -reshape(self._R, 3, 3) @ self._v
+        p_dot = reshape(self._R, 3, 3) @ self._v
 
         for i in range(self._tau.shape[0]): 
 
-            W_t -= vertcat(self._tau[i]*(p_dot/norm_2(p_dot)), -self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
+            W_t -= vertcat(self._tau[i]*(p_dot/norm_2(p_dot)), self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
+            # W_t -= vertcat(self._tau1[i]*(p_dot/norm_2(p_dot)), self._tau1[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
 
         W_t += vertcat(self._mass_body*self._g, 0, 0, 0)
 
         return W_t
+
+    def get_point_force_position_boundary1(self):
+
+        W_t = SX.zeros(6)
+
+        # p_dot = reshape(self._R, 3, 3) @ np.linalg.inv(np.array([[-1, 0, 0],[0, 1, 0],[0, 0, -1]])) @ self._v
+        p_dot = reshape(self._R, 3, 3) @ self._v
+
+        for i in range(self._tau.shape[0]): 
+
+            W_t -= vertcat(self._tau[i]*(p_dot/norm_2(p_dot)), self._tau[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
+            W_t += vertcat(self._tau1[i]*(p_dot/norm_2(p_dot)), self._tau1[i]*skew(reshape(self._R, 3, 3)@transpose(self._tendon_radiuses[i, :]))@(p_dot/norm_2(p_dot)))
+
+        W_t += vertcat(self._mass_body*self._g, 0, 0, 0)
+
+        return W_t
+
+
 
     def get_point_force_first_arm(self):
 

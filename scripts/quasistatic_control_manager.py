@@ -39,11 +39,11 @@ class Quasistatic_Control_Manager:
         self._current_states = np.zeros((19, 1))
         self._boundary_Jacobian = np.zeros((6, 9))
         self._init_wrench = np.zeros(6)
-        self._current_full_states = np.zeros((13+self._num_tendons, self._robot_arm_model.get_num_integration_steps()+1))
+        self._current_full_states = np.zeros((13+self._num_tendons*2, self._robot_arm_model.get_num_integration_steps()+1))
         self._current_full_states[3, :] = 1
         self._time_step = 1e-2
         self._t = 0.0
-        self._history_states = np.zeros((14+self._num_tendons, self._robot_arm_model.get_num_integration_steps()+1, 10000))
+        self._history_states = np.zeros((14+self._num_tendons*2, self._robot_arm_model.get_num_integration_steps()+1, 10000))
         self.wrench_lb = -50
         self.wrench_ub = 50
         self.pos_ub = 5
@@ -67,16 +67,16 @@ class Quasistatic_Control_Manager:
 
     def set_tensions_static_MS_solver_position_boundary(self, tension):
         
-        lbx_0 = np.hstack((np.array([0, 0, 0, 1, 0, 0, 0]), self.wrench_lb*np.ones(6), tension))
-        ubx_0 = np.hstack((np.array([0, 0, 0, 1, 0, 0, 0]), -self.wrench_lb*np.ones(6), tension))
+        lbx_0 = np.hstack((np.array([0, 0, 0, 1, 0, 0, 0]), self.wrench_lb*np.ones(6), tension, np.zeros(3)))
+        ubx_0 = np.hstack((np.array([0, 0, 0, 1, 0, 0, 0]), -self.wrench_lb*np.ones(6), tension, np.zeros(3)))
 
         self._solver_static_position_boundary.constraints_set(0, 'lbx', lbx_0)
         self._solver_static_position_boundary.constraints_set(0, 'ubx', ubx_0)
 
     def set_tensions_static_MS_solver(self, tension): 
 
-        lbx_0 = np.hstack((0, 0, 0, 1, 0, 0, 0, self._wrench_lb*np.ones(6), tension))
-        ubx_0 = np.hstack((0, 0, 0, 1, 0, 0, 0, self._wrench_ub*np.ones(6), tension))        
+        lbx_0 = np.hstack((0, 0, 0, 1, 0, 0, 0, self._wrench_lb*np.ones(6), tension, np.zeros(3)))
+        ubx_0 = np.hstack((0, 0, 0, 1, 0, 0, 0, self._wrench_ub*np.ones(6), tension, np.zeros(3)))        
 
         self._solver_static.constraints_set(0, 'lbx', lbx_0)
         self._solver_static.constraints_set(0, 'ubx', ubx_0)
@@ -191,7 +191,7 @@ class Quasistatic_Control_Manager:
         self._differential_kinematics_solver.solve()
         x = self._differential_kinematics_solver.get(0, 'u')
 
-        return x 
+        return x
 
 
     def apply_tension_differential_position_boundary(self, delta_q_tau): 
@@ -233,7 +233,6 @@ class Quasistatic_Control_Manager:
     def print_states(self): 
 
         print(self._current_states)
-
 
     def print_states_position_boundary(self): 
 
@@ -310,7 +309,7 @@ class Quasistatic_Control_Manager:
 
                         self._final_sol_viz[:, k] = self._solver_static_position_boundary.get(k, 'x')[0:3]
 
-                    self._init_sol_boundaries = np.hstack((self._init_sol, 0*np.ones(3)))
+                    self._init_sol_boundaries = self._init_sol
                     self._integrator_static_full.set('x', self._init_sol)
                     self._integrator_static_full.solve()
                     self._init_pose_plus_wrench = self._solver_static_position_boundary.get(0, 'x')[0:13]
