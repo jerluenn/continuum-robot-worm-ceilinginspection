@@ -1,63 +1,61 @@
 import sys
 import numpy as np
 import time
+from casadi import *
+from pyquaternion import Quaternion
 
 sys.path.insert(0, "..")
 
 from generate_multiple_shooting_solver import Multiple_Shooting_Solver
 from generate_robot_arm_model import Robot_Arm_Model
 from generate_robot_arm_parameters import Robot_Arm_Params
+from dynamics_manager import Dynamics_Manager
 
-NUM_ITERATIONS = 100
+from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
-robot_arm_1 = Robot_Arm_Params(0.15, 0.03, -0.5, "1")
-robot_arm_1.from_solid_rod(0.001, 100e9, 200e9, 8000)
-C = np.diag([0.03, 0.03, 0.03])
-Bbt = np.diag([1e-6, 1e-6, 1e-6])
+NUM_ITERATIONS = 1000
+
+### SETTING UP SOLVER ###
+
+tendon_radiuses = SX([[-0.01, 0.01, 0], [-0.01, -0.01, 0], [0.015, 0, 0]])
+robot_arm_1 = Robot_Arm_Params(0.15, 0.05, -0.5, "1")
+robot_arm_1.from_solid_rod(0.0005, 100e9, 200e9, 8000)
+C = np.diag([0.000, 0.000, 0.000])
+Bbt = np.diag([1e-4, 1e-4, 1e-4])
 Bse = Bbt
+# Bse = np.zeros((3,3))
+# Bbt = np.zeros((3,3))
 robot_arm_1.set_damping_coefficient(C)
 robot_arm_1.set_damping_factor(Bbt, Bse)
-
+robot_arm_1.set_tendon_radiuses(tendon_radiuses)
 robot_arm_model_1 = Robot_Arm_Model(robot_arm_1)
-d1 = Multiple_Shooting_Solver(robot_arm_model_1)
-solver, integrator = d1.create_static_solver()
-
-yref = np.zeros(16)
-
-solver.cost_set(robot_arm_model_1.get_num_integration_steps(), 'yref', yref)
 
 initial_solution = np.zeros(16)
 initial_solution[3] = 1
-# initial_solution[7] = 3.69828287e-02
-# initial_solution[11] = 0.0027
-initial_solution[7] = 4
-initial_solution[11] = -4
-solver.set(0, 'x', initial_solution)
 
-subseq_solution = initial_solution
+### SOLVING ###
 
-for i in range(robot_arm_model_1.get_num_integration_steps()): 
+sim_manager = Dynamics_Manager(robot_arm_model_1, -0.5, 0.01)
+sim_manager.initialise_static_solver(initial_solution)
+sim_manager.set_tensions_static([0.0, 0.0, 0])
+sim_manager.solve_for_static()
+sim_manager.visualise()
 
-    integrator.set('x', subseq_solution)
-    integrator.solve()
-    subseq_solution = integrator.get('x')
-    solver.set(i+1, 'x', subseq_solution)
+sim_manager.set_tensions_dynamic([0.0, 0.0, 0])
+sim_manager.solve_for_dynamic()
 
-t0 = time.time()
+tension = np.array([0.0, 0.0, 0.0])
 
-for i in range(NUM_ITERATIONS): 
+for i in range(100): 
 
-    solver.solve()
+    tension[0] += 0.03
+    tension[2] += 0.04
+    sim_manager.set_tensions_dynamic(tension)
+    sim_manager.solve_for_dynamic()
 
-    if solver.get_cost() < 1e-9:
+sim_manager.solve_for_dynamic()
+sim_manager.visualise()
 
-        break
-
-    NUM_ITERATIONS_TAKEN = i
-
-print(f"NUM_ITERATIONS_TAKEN to converge: ", NUM_ITERATIONS_TAKEN)
-print(f"Time taken/step: {(time.time() - t0)/NUM_ITERATIONS_TAKEN}")
-
-print("Final sol: ",solver.get(10, 'x'))
-print("Init sol: ", solver.get(0, 'x'))
+# pass
 

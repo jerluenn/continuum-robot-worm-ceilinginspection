@@ -4,13 +4,15 @@ from casadi import *
 
 class Robot_Arm_Params: 
 
-    def __init__(self, robot_arm_length, time_step, alpha, _id): 
+    def __init__(self, robot_arm_length, time_step, alpha, _id, mass_body): 
 
+        self._mass_body = mass_body
         self._robot_arm_length = robot_arm_length
         self._created = 0 
         self._time_step = time_step
         self._alpha = alpha
         self._id = _id
+        self._g_direction = 'z'
 
     def from_custom(self, Kse, Kbt):
 
@@ -35,6 +37,15 @@ class Robot_Arm_Params:
         self._J = J 
         self._I = I
 
+    def get_mass_body(self): 
+
+        return self._mass_body
+
+    def set_tendon_radiuses(self, r): 
+
+        self._tendon_radiuses = SX(r)
+        self._tendon_radiuses_numpy = np.array(r)
+
     def set_damping_coefficient(self, C): 
 
         self._C = C 
@@ -55,6 +66,10 @@ class Robot_Arm_Params:
     def set_rho(self, rho): 
 
         self._rho = rho
+
+    def get_tendon_radiuses(self): 
+
+        return self._tendon_radiuses
 
     def get_id(self):
 
@@ -103,3 +118,7 @@ class Robot_Arm_Params:
     def get_rho(self): 
 
         return self._rho
+
+    def set_gravity_vector(self, vector): 
+
+        self._g_direction = vector
