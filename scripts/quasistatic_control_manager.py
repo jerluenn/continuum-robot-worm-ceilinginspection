@@ -12,7 +12,6 @@ from pyquaternion import Quaternion
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
-import osqp
 from scipy import sparse
 
 class Quasistatic_Control_Manager: 
