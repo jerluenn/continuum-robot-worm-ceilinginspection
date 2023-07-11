@@ -102,11 +102,11 @@ class Linear_MPC:
         # set prediction horizon
         ocp.solver_options.tf = self._Tf
 
-        AcadosOcpSolver.generate(ocp, json_file=f'{ocp.model.name}.json')
-        AcadosOcpSolver.build(ocp.code_export_directory, with_cython=True)
+        ##AcadosOcpSolver.generate(ocp, json_file=f'{ocp.model.name}.json')
+        #AcadosOcpSolver.build(ocp.code_export_directory, with_cython=True)
         
-        solver = AcadosOcpSolver.create_cython_solver(json_file=f'{ocp.model.name}.json')
-        # solver = AcadosOcpSolver(ocp, json_file=f'{ocp.model.name}.json')
+        # solver = AcadosOcpSolver.create_cython_solver(json_file=f'{ocp.model.name}.json')
+        solver = AcadosOcpSolver(ocp, json_file=f'{ocp.model.name}.json')
         integrator = AcadosSimSolver(ocp, json_file=f'{ocp.model.name}.json')
 
         return solver, integrator
