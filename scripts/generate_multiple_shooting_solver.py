@@ -90,11 +90,11 @@ class Multiple_Shooting_Solver:
 
         self.ocp.code_export_directory = 'ocp_solver_full_robot' + self.ocp.model.name
 
-        AcadosOcpSolver.generate(self.ocp, json_file=f'{self.ocp.model.name}.json')
-        AcadosOcpSolver.build(self.ocp.code_export_directory, with_cython=True)
+        #AcadosOcpSolver.generate(self.ocp, json_file=f'{self.ocp.model.name}.json')
+        #AcadosOcpSolver.build(self.ocp.code_export_directory, with_cython=True)
         
-        solver = AcadosOcpSolver.create_cython_solver(json_file=f'{self.ocp.model.name}.json')
-        # solver = AcadosOcpSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
+        # solver = AcadosOcpSolver.create_cython_solver(json_file=f'{self.ocp.model.name}.json')
+        solver = AcadosOcpSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
         integrator = AcadosSimSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
 
         return solver, integrator        
@@ -168,11 +168,11 @@ class Multiple_Shooting_Solver:
 
         self.ocp.code_export_directory = 'ocp_solver_position_boundary' + self.ocp.model.name
 
-        AcadosOcpSolver.generate(self.ocp, json_file=f'{self.ocp.model.name}.json')
-        AcadosOcpSolver.build(self.ocp.code_export_directory, with_cython=True)
+        #AcadosOcpSolver.generate(self.ocp, json_file=f'{self.ocp.model.name}.json')
+        #AcadosOcpSolver.build(self.ocp.code_export_directory, with_cython=True)
         
-        solver = AcadosOcpSolver.create_cython_solver(json_file=f'{self.ocp.model.name}.json')
-        # solver = AcadosOcpSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
+        #solver = AcadosOcpSolver.create_cython_solver(json_file=f'{self.ocp.model.name}.json')
+        solver = AcadosOcpSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
         integrator = AcadosSimSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
 
         return solver, integrator        
@@ -238,11 +238,11 @@ class Multiple_Shooting_Solver:
 
         self.ocp.code_export_directory = 'ocp_solver' + self.ocp.model.name
 
-        AcadosOcpSolver.generate(self.ocp, json_file=f'{self.ocp.model.name}.json')
-        AcadosOcpSolver.build(self.ocp.code_export_directory, with_cython=True)
+        #AcadosOcpSolver.generate(self.ocp, json_file=f'{self.ocp.model.name}.json')
+        #AcadosOcpSolver.build(self.ocp.code_export_directory, with_cython=True)
         
-        solver = AcadosOcpSolver.create_cython_solver(json_file=f'{self.ocp.model.name}.json')
-        # solver = AcadosOcpSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
+        #solver = AcadosOcpSolver.create_cython_solver(json_file=f'{self.ocp.model.name}.json')
+        solver = AcadosOcpSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
         integrator = AcadosSimSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
 
         return solver, integrator
@@ -312,11 +312,11 @@ class Multiple_Shooting_Solver:
 
         self.ocp.solver_options.nlp_solver_max_iter = 1
 
-        AcadosOcpSolver.generate(self.ocp, json_file=f'{self.ocp.model.name}.json')
-        AcadosOcpSolver.build(self.ocp.code_export_directory, with_cython=True)
+        # AcadosOcpSolver.generate(self.ocp, json_file=f'{self.ocp.model.name}.json')
+        # AcadosOcpSolver.build(self.ocp.code_export_directory, with_cython=True)
         
-        solver = AcadosOcpSolver.create_cython_solver(json_file=f'{self.ocp.model.name}.json')
-        # solver = AcadosOcpSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
+        # solver = AcadosOcpSolver.create_cython_solver(json_file=f'{self.ocp.model.name}.json')
+        solver = AcadosOcpSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
         integrator = AcadosSimSolver(self.ocp, json_file=f'{self.ocp.model.name}.json')
 
         return solver, integrator
